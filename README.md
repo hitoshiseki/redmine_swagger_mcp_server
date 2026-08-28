@@ -55,7 +55,7 @@ curl http://IP_DO_SERVIDOR:3001/health
 Obter API key pessoal: Redmine → **Minha conta** → **Chave de acesso à API**.
 
 ```bash
-claude mcp add --transport sse --scope user --header "X-Redmine-Api-Key: SUA_KEY_PESSOAL" nexusgov-redmine http://IP_DO_SERVIDOR:3001/sse
+claude mcp add --transport sse --scope user nexusgov-redmine http://IP_DO_SERVIDOR:3001/sse --header "X-Redmine-Api-Key: SUA_KEY_PESSOAL"
 ```
 
 Reiniciar sessão do Claude Code. Pronto.
