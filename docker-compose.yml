@@ -4,7 +4,7 @@ services:
     image: nexusgov-redmine-mcp:latest
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       MCP_TRANSPORT: http
       PORT: "3000"
