@@ -1,11 +1,8 @@
 const REDMINE_URL = (process.env.REDMINE_URL ?? "").replace(/\/$/, "");
-const REDMINE_API_KEY = process.env.REDMINE_API_KEY ?? "";
 const REDMINE_DEFAULT_PROJECT_ID = process.env.REDMINE_DEFAULT_PROJECT_ID ?? "";
 
-if (!REDMINE_URL || !REDMINE_API_KEY) {
-  throw new Error(
-    "REDMINE_URL e REDMINE_API_KEY precisam estar definidos no .env do servidor MCP",
-  );
+if (!REDMINE_URL) {
+  throw new Error("REDMINE_URL precisa estar definido no .env do servidor MCP");
 }
 
 interface RedmineStatus {
@@ -30,11 +27,11 @@ interface RedmineIssue {
 
 let statusCache: RedmineStatus[] | null = null;
 
-async function redmineFetch(path: string, init?: RequestInit): Promise<Response> {
+async function redmineFetch(path: string, apiKey: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(`${REDMINE_URL}${path}`, {
     ...init,
     headers: {
-      "X-Redmine-API-Key": REDMINE_API_KEY,
+      "X-Redmine-API-Key": apiKey,
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
     },
@@ -46,16 +43,16 @@ async function redmineFetch(path: string, init?: RequestInit): Promise<Response>
   return res;
 }
 
-export async function getIssueStatuses(): Promise<RedmineStatus[]> {
+export async function getIssueStatuses(apiKey: string): Promise<RedmineStatus[]> {
   if (statusCache) return statusCache;
-  const res = await redmineFetch("/issue_statuses.json");
+  const res = await redmineFetch("/issue_statuses.json", apiKey);
   const data = (await res.json()) as { issue_statuses: RedmineStatus[] };
   statusCache = data.issue_statuses;
   return statusCache;
 }
 
-async function resolveStatusId(statusName: string): Promise<number> {
-  const statuses = await getIssueStatuses();
+async function resolveStatusId(statusName: string, apiKey: string): Promise<number> {
+  const statuses = await getIssueStatuses(apiKey);
   const match = statuses.find(
     (s) => s.name.toLowerCase() === statusName.toLowerCase(),
   );
@@ -70,23 +67,24 @@ export async function listIssues(params: {
   projectId?: string;
   statusName: string;
   limit?: number;
+  apiKey: string;
 }): Promise<RedmineIssue[]> {
   const projectId = params.projectId ?? REDMINE_DEFAULT_PROJECT_ID;
   if (!projectId) {
     throw new Error("projectId não informado e REDMINE_DEFAULT_PROJECT_ID não configurado");
   }
-  const statusId = await resolveStatusId(params.statusName);
+  const statusId = await resolveStatusId(params.statusName, params.apiKey);
   const limit = params.limit ?? 100;
   const qs = new URLSearchParams({
     status_id: String(statusId),
     limit: String(limit),
   });
-  const res = await redmineFetch(`/projects/${projectId}/issues.json?${qs}`);
+  const res = await redmineFetch(`/projects/${projectId}/issues.json?${qs}`, params.apiKey);
   const data = (await res.json()) as { issues: RedmineIssue[] };
   return data.issues;
 }
 
-export async function getIssues(issueIds: number[]): Promise<RedmineIssue[]> {
+export async function getIssues(issueIds: number[], apiKey: string): Promise<RedmineIssue[]> {
   if (issueIds.length === 0) {
     throw new Error("issueIds vazio");
   }
@@ -95,14 +93,14 @@ export async function getIssues(issueIds: number[]): Promise<RedmineIssue[]> {
     include: "journals",
     limit: String(issueIds.length),
   });
-  const res = await redmineFetch(`/issues.json?${qs}`);
+  const res = await redmineFetch(`/issues.json?${qs}`, apiKey);
   const data = (await res.json()) as { issues: RedmineIssue[] };
   return data.issues;
 }
 
-export async function updateIssueStatus(issueId: number, statusName: string): Promise<void> {
-  const statusId = await resolveStatusId(statusName);
-  await redmineFetch(`/issues/${issueId}.json`, {
+export async function updateIssueStatus(issueId: number, statusName: string, apiKey: string): Promise<void> {
+  const statusId = await resolveStatusId(statusName, apiKey);
+  await redmineFetch(`/issues/${issueId}.json`, apiKey, {
     method: "PUT",
     body: JSON.stringify({ issue: { status_id: statusId } }),
   });

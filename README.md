@@ -35,10 +35,11 @@ Dois modos de uso:
 
    | Variável | Valor |
    |----------|-------|
-   | `REDMINE_URL` | `https://sistemas.sofintech.com.br/redmine` |
-   | `REDMINE_API_KEY` | Chave de API do Redmine (compartilhada da equipe) |
+   | `REDMINE_URL` | URL do Redmine |
    | `REDMINE_DEFAULT_PROJECT_ID` | `15` |
-   | `SWAGGER_URL` | `http://45.79.207.184:8080/v3/api-docs` |
+   | `SWAGGER_URL` | URL do swagger |
+
+   > `REDMINE_API_KEY` **não vai no Portainer** — cada dev envia a própria key via header.
 
 4. **Deploy the stack**
 
@@ -46,13 +47,27 @@ Verificar:
 
 ```bash
 curl http://IP_DO_SERVIDOR:3001/health
-# {"status":"ok"}
+# {"status":"ok","sessions":0}
 ```
 
 ### Conectar (cada dev, uma vez)
 
-```bash
-claude mcp add nexusgov-redmine --transport sse http://IP_DO_SERVIDOR:3001/sse
+Obter API key pessoal: Redmine → **Minha conta** → **Chave de acesso à API**.
+
+Adicionar manualmente em `~/.claude/claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "nexusgov-redmine": {
+      "type": "sse",
+      "url": "http://IP_DO_SERVIDOR:3001/sse",
+      "headers": {
+        "X-Redmine-Api-Key": "SUA_API_KEY_PESSOAL"
+      }
+    }
+  }
+}
 ```
 
 Reiniciar sessão do Claude Code. Pronto.

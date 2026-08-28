@@ -23,11 +23,6 @@ const STATUS_NAMES = [
   "Cancelada",
 ] as const;
 
-const server = new McpServer({
-  name: "nexusgov-redmine",
-  version: "1.0.0",
-});
-
 function textResult(data: unknown) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
@@ -42,158 +37,184 @@ function errorResult(err: unknown) {
   };
 }
 
-server.registerTool(
-  "redmine_list_issues",
-  {
-    title: "Listar tarefas do Redmine por status",
-    description:
-      "Busca as tarefas de um projeto Redmine filtradas por status (Nova, Priorizada, Paralizada, Em andamento, Teste de Qualidade, Em Ajuste, Concluído, Fechada, Cancelada).",
-    inputSchema: {
-      status: z.enum(STATUS_NAMES).describe("Nome exato do status no Redmine"),
-      projectId: z
-        .string()
-        .optional()
-        .describe("ID do projeto Redmine. Se omitido, usa REDMINE_DEFAULT_PROJECT_ID do .env"),
-      limit: z.number().int().positive().max(200).optional().describe("Máximo de tarefas (default 100)"),
-    },
-  },
-  async ({ status, projectId, limit }) => {
-    try {
-      const issues = await listIssues({ statusName: status, projectId, limit });
-      return textResult(issues);
-    } catch (err) {
-      return errorResult(err);
-    }
-  },
-);
+function buildServer(apiKey: string): McpServer {
+  const server = new McpServer({
+    name: "nexusgov-redmine",
+    version: "1.0.0",
+  });
 
-server.registerTool(
-  "redmine_get_issues",
-  {
-    title: "Buscar tarefa(s) do Redmine por id",
-    description:
-      "Busca detalhes completos (descrição, histórico) de uma ou várias tarefas do Redmine pelos ids, numa única chamada.",
-    inputSchema: {
-      issueIds: z.array(z.number().int().positive()).min(1).describe("Lista de ids das tarefas"),
+  server.registerTool(
+    "redmine_list_issues",
+    {
+      title: "Listar tarefas do Redmine por status",
+      description:
+        "Busca as tarefas de um projeto Redmine filtradas por status (Nova, Priorizada, Paralizada, Em andamento, Teste de Qualidade, Em Ajuste, Concluído, Fechada, Cancelada).",
+      inputSchema: {
+        status: z.enum(STATUS_NAMES).describe("Nome exato do status no Redmine"),
+        projectId: z
+          .string()
+          .optional()
+          .describe("ID do projeto Redmine. Se omitido, usa REDMINE_DEFAULT_PROJECT_ID do .env"),
+        limit: z.number().int().positive().max(200).optional().describe("Máximo de tarefas (default 100)"),
+      },
     },
-  },
-  async ({ issueIds }) => {
-    try {
-      const issues = await getIssues(issueIds);
-      return textResult(issues);
-    } catch (err) {
-      return errorResult(err);
-    }
-  },
-);
-
-server.registerTool(
-  "redmine_update_issue_status",
-  {
-    title: "Alterar status de uma tarefa do Redmine",
-    description: "Atualiza o status de uma tarefa do Redmine pelo id.",
-    inputSchema: {
-      issueId: z.number().int().positive().describe("Id da tarefa"),
-      status: z.enum(STATUS_NAMES).describe("Novo status"),
+    async ({ status, projectId, limit }) => {
+      try {
+        const issues = await listIssues({ statusName: status, projectId, limit, apiKey });
+        return textResult(issues);
+      } catch (err) {
+        return errorResult(err);
+      }
     },
-  },
-  async ({ issueId, status }) => {
-    try {
-      await updateIssueStatus(issueId, status);
-      return textResult({ issueId, status, updated: true });
-    } catch (err) {
-      return errorResult(err);
-    }
-  },
-);
+  );
 
-server.registerTool(
-  "redmine_list_statuses",
-  {
-    title: "Listar status disponíveis no Redmine",
-    description: "Lista os status de tarefa configurados no Redmine (nome + id).",
-    inputSchema: {},
-  },
-  async () => {
-    try {
-      const statuses = await getIssueStatuses();
-      return textResult(statuses);
-    } catch (err) {
-      return errorResult(err);
-    }
-  },
-);
-
-server.registerTool(
-  "api_search_endpoints",
-  {
-    title: "Buscar endpoints na API do NexusGOV (swagger)",
-    description:
-      "Busca (por texto livre) endpoints no OpenAPI spec atual do backend NexusGOV, batendo contra path, summary, operationId e tags. Retorna uma lista compacta — use api_get_endpoint para pegar o contrato completo de um endpoint específico.",
-    inputSchema: {
-      query: z.string().min(1).describe("Termo de busca, ex: 'processo-sancionador', 'contrato', 'ocorrencia'"),
+  server.registerTool(
+    "redmine_get_issues",
+    {
+      title: "Buscar tarefa(s) do Redmine por id",
+      description:
+        "Busca detalhes completos (descrição, histórico) de uma ou várias tarefas do Redmine pelos ids, numa única chamada.",
+      inputSchema: {
+        issueIds: z.array(z.number().int().positive()).min(1).describe("Lista de ids das tarefas"),
+      },
     },
-  },
-  async ({ query }) => {
-    try {
-      const results = await searchApiEndpoints(query);
-      return textResult(results);
-    } catch (err) {
-      return errorResult(err);
-    }
-  },
-);
-
-server.registerTool(
-  "api_get_endpoint",
-  {
-    title: "Detalhe de um endpoint da API do NexusGOV (swagger)",
-    description:
-      "Retorna o contrato completo (parameters, requestBody, responses, schemas resolvidos) de um endpoint específico da API do backend NexusGOV. Use api_search_endpoints antes para achar o path/method certo.",
-    inputSchema: {
-      path: z.string().min(1).describe("Path exato do endpoint, ex: /api/v1/contratos/{id}"),
-      method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).describe("Método HTTP"),
+    async ({ issueIds }) => {
+      try {
+        const issues = await getIssues(issueIds, apiKey);
+        return textResult(issues);
+      } catch (err) {
+        return errorResult(err);
+      }
     },
-  },
-  async ({ path, method }) => {
-    try {
-      const endpoint = await getApiEndpoint(path, method);
-      return textResult(endpoint);
-    } catch (err) {
-      return errorResult(err);
-    }
-  },
-);
+  );
+
+  server.registerTool(
+    "redmine_update_issue_status",
+    {
+      title: "Alterar status de uma tarefa do Redmine",
+      description: "Atualiza o status de uma tarefa do Redmine pelo id.",
+      inputSchema: {
+        issueId: z.number().int().positive().describe("Id da tarefa"),
+        status: z.enum(STATUS_NAMES).describe("Novo status"),
+      },
+    },
+    async ({ issueId, status }) => {
+      try {
+        await updateIssueStatus(issueId, status, apiKey);
+        return textResult({ issueId, status, updated: true });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_list_statuses",
+    {
+      title: "Listar status disponíveis no Redmine",
+      description: "Lista os status de tarefa configurados no Redmine (nome + id).",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const statuses = await getIssueStatuses(apiKey);
+        return textResult(statuses);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "api_search_endpoints",
+    {
+      title: "Buscar endpoints na API do NexusGOV (swagger)",
+      description:
+        "Busca (por texto livre) endpoints no OpenAPI spec atual do backend NexusGOV, batendo contra path, summary, operationId e tags. Retorna uma lista compacta — use api_get_endpoint para pegar o contrato completo de um endpoint específico.",
+      inputSchema: {
+        query: z.string().min(1).describe("Termo de busca, ex: 'processo-sancionador', 'contrato', 'ocorrencia'"),
+      },
+    },
+    async ({ query }) => {
+      try {
+        const results = await searchApiEndpoints(query);
+        return textResult(results);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "api_get_endpoint",
+    {
+      title: "Detalhe de um endpoint da API do NexusGOV (swagger)",
+      description:
+        "Retorna o contrato completo (parameters, requestBody, responses, schemas resolvidos) de um endpoint específico da API do backend NexusGOV. Use api_search_endpoints antes para achar o path/method certo.",
+      inputSchema: {
+        path: z.string().min(1).describe("Path exato do endpoint, ex: /api/v1/contratos/{id}"),
+        method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).describe("Método HTTP"),
+      },
+    },
+    async ({ path, method }) => {
+      try {
+        const endpoint = await getApiEndpoint(path, method);
+        return textResult(endpoint);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  return server;
+}
 
 async function mainStdio() {
+  const apiKey = process.env.REDMINE_API_KEY ?? "";
+  if (!apiKey) throw new Error("REDMINE_API_KEY precisa estar definido no .env");
+  const server = buildServer(apiKey);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 
 async function mainHttp() {
   const port = parseInt(process.env.PORT ?? "3000");
-  let activeTransport: SSEServerTransport | null = null;
+  const sessions = new Map<string, SSEServerTransport>();
 
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     if (req.url === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok" }));
+      res.end(JSON.stringify({ status: "ok", sessions: sessions.size }));
       return;
     }
+
     if (req.method === "GET" && req.url === "/sse") {
-      activeTransport = new SSEServerTransport("/message", res);
-      await server.connect(activeTransport);
-      return;
-    }
-    if (req.method === "POST" && req.url === "/message") {
-      if (!activeTransport) {
-        res.writeHead(503);
-        res.end("No SSE session active");
+      const apiKey = req.headers["x-redmine-api-key"] as string | undefined;
+      if (!apiKey) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Header X-Redmine-Api-Key obrigatório" }));
         return;
       }
-      await activeTransport.handlePostMessage(req, res);
+      const server = buildServer(apiKey);
+      const transport = new SSEServerTransport("/message", res);
+      sessions.set(transport.sessionId, transport);
+      transport.onclose = () => sessions.delete(transport.sessionId);
+      await server.connect(transport);
       return;
     }
+
+    if (req.method === "POST" && req.url?.startsWith("/message")) {
+      const sessionId = new URL(req.url, "http://localhost").searchParams.get("sessionId") ?? "";
+      const transport = sessions.get(sessionId);
+      if (!transport) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Sessão não encontrada" }));
+        return;
+      }
+      await transport.handlePostMessage(req, res);
+      return;
+    }
+
     res.writeHead(404);
     res.end("Not found");
   });
