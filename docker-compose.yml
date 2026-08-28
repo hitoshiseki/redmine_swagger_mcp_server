@@ -1,0 +1,19 @@
+services:
+  nexusgov-redmine-mcp:
+    build: .
+    image: nexusgov-redmine-mcp:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      MCP_TRANSPORT: http
+      PORT: "3000"
+      REDMINE_URL: ${REDMINE_URL}
+      REDMINE_API_KEY: ${REDMINE_API_KEY}
+      REDMINE_DEFAULT_PROJECT_ID: ${REDMINE_DEFAULT_PROJECT_ID:-15}
+      SWAGGER_URL: ${SWAGGER_URL}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

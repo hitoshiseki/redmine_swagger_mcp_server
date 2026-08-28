@@ -1,8 +1,10 @@
 import { config } from "dotenv";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 config({ path: join(dirname(fileURLToPath(import.meta.url)), "..", ".env"), quiet: true });
 
@@ -163,11 +165,45 @@ server.registerTool(
   },
 );
 
-async function main() {
+async function mainStdio() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 
+async function mainHttp() {
+  const port = parseInt(process.env.PORT ?? "3000");
+  let activeTransport: SSEServerTransport | null = null;
+
+  const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+    if (req.method === "GET" && req.url === "/sse") {
+      activeTransport = new SSEServerTransport("/message", res);
+      await server.connect(activeTransport);
+      return;
+    }
+    if (req.method === "POST" && req.url === "/message") {
+      if (!activeTransport) {
+        res.writeHead(503);
+        res.end("No SSE session active");
+        return;
+      }
+      await activeTransport.handlePostMessage(req, res);
+      return;
+    }
+    res.writeHead(404);
+    res.end("Not found");
+  });
+
+  httpServer.listen(port, () => {
+    console.error(`MCP SSE server ouvindo na porta ${port}`);
+  });
+}
+
+const main = process.env.MCP_TRANSPORT === "http" ? mainHttp : mainStdio;
 main().catch((err) => {
   console.error("Falha ao iniciar servidor MCP nexusgov-redmine:", err);
   process.exit(1);
