@@ -54,20 +54,8 @@ curl http://IP_DO_SERVIDOR:3001/health
 
 Obter API key pessoal: Redmine → **Minha conta** → **Chave de acesso à API**.
 
-Adicionar manualmente em `~/.claude/claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "nexusgov-redmine": {
-      "type": "sse",
-      "url": "http://IP_DO_SERVIDOR:3001/sse",
-      "headers": {
-        "X-Redmine-Api-Key": "SUA_API_KEY_PESSOAL"
-      }
-    }
-  }
-}
+```bash
+claude mcp add --transport sse --scope user --header "X-Redmine-Api-Key: SUA_KEY_PESSOAL" nexusgov-redmine http://IP_DO_SERVIDOR:3001/sse
 ```
 
 Reiniciar sessão do Claude Code. Pronto.
@@ -102,11 +90,13 @@ Editar `.env` com sua própria API key:
 
 ### Registrar no Claude Code
 
+Rode de dentro da pasta do projeto:
+
 ```bash
-claude mcp add nexusgov-redmine --scope user -- node "$(pwd)/dist/index.js"
+claude mcp add --scope user nexusgov-redmine -- node "$(pwd)/dist/index.js"
 ```
 
-Rode de dentro da pasta do projeto. `--scope user` deixa disponível em qualquer sessão.
+`--scope user` deixa disponível em qualquer sessão.
 
 ```bash
 claude mcp list
