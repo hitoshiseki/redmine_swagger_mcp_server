@@ -10,6 +10,11 @@ interface RedmineStatus {
   name: string;
 }
 
+interface RedmineTracker {
+  id: number;
+  name: string;
+}
+
 interface RedmineIssue {
   id: number;
   project: { id: number; name: string };
@@ -26,6 +31,7 @@ interface RedmineIssue {
 }
 
 let statusCache: RedmineStatus[] | null = null;
+let trackerCache: RedmineTracker[] | null = null;
 
 async function redmineFetch(path: string, apiKey: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(`${REDMINE_URL}${path}`, {
@@ -51,6 +57,26 @@ export async function getIssueStatuses(apiKey: string): Promise<RedmineStatus[]>
   return statusCache;
 }
 
+export async function getIssueTrackers(apiKey: string): Promise<RedmineTracker[]> {
+  if (trackerCache) return trackerCache;
+  const res = await redmineFetch("/trackers.json", apiKey);
+  const data = (await res.json()) as { trackers: RedmineTracker[] };
+  trackerCache = data.trackers;
+  return trackerCache;
+}
+
+async function resolveTrackerId(trackerName: string, apiKey: string): Promise<number> {
+  const trackers = await getIssueTrackers(apiKey);
+  const match = trackers.find(
+    (t) => t.name.toLowerCase() === trackerName.toLowerCase(),
+  );
+  if (!match) {
+    const names = trackers.map((t) => t.name).join(", ");
+    throw new Error(`Tracker "${trackerName}" não encontrado no Redmine. Trackers disponíveis: ${names}`);
+  }
+  return match.id;
+}
+
 async function resolveStatusId(statusName: string, apiKey: string): Promise<number> {
   const statuses = await getIssueStatuses(apiKey);
   const match = statuses.find(
@@ -65,7 +91,8 @@ async function resolveStatusId(statusName: string, apiKey: string): Promise<numb
 
 export async function listIssues(params: {
   projectId?: string;
-  statusName: string;
+  statusName?: string;
+  trackerName?: string;
   limit?: number;
   apiKey: string;
 }): Promise<RedmineIssue[]> {
@@ -73,12 +100,18 @@ export async function listIssues(params: {
   if (!projectId) {
     throw new Error("projectId não informado e REDMINE_DEFAULT_PROJECT_ID não configurado");
   }
-  const statusId = await resolveStatusId(params.statusName, params.apiKey);
   const limit = params.limit ?? 100;
   const qs = new URLSearchParams({
-    status_id: String(statusId),
     limit: String(limit),
   });
+  if (params.statusName) {
+    const statusId = await resolveStatusId(params.statusName, params.apiKey);
+    qs.set("status_id", String(statusId));
+  }
+  if (params.trackerName) {
+    const trackerId = await resolveTrackerId(params.trackerName, params.apiKey);
+    qs.set("tracker_id", String(trackerId));
+  }
   const res = await redmineFetch(`/projects/${projectId}/issues.json?${qs}`, params.apiKey);
   const data = (await res.json()) as { issues: RedmineIssue[] };
   return data.issues;

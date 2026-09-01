@@ -8,7 +8,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 config({ path: join(dirname(fileURLToPath(import.meta.url)), "..", ".env"), quiet: true });
 
-const { getIssueStatuses, listIssues, getIssues, updateIssueStatus } = await import("./redmine.js");
+const { getIssueStatuses, getIssueTrackers, listIssues, getIssues, updateIssueStatus } = await import("./redmine.js");
 const { searchApiEndpoints, getApiEndpoint } = await import("./swagger.js");
 
 const STATUS_NAMES = [
@@ -46,11 +46,12 @@ function buildServer(apiKey: string): McpServer {
   server.registerTool(
     "redmine_list_issues",
     {
-      title: "Listar tarefas do Redmine por status",
+      title: "Listar tarefas do Redmine por status e/ou tracker",
       description:
-        "Busca as tarefas de um projeto Redmine filtradas por status (Nova, Priorizada, Paralizada, Em andamento, Teste de Qualidade, Em Ajuste, Concluído, Fechada, Cancelada).",
+        "Busca as tarefas de um projeto Redmine filtradas por status (Nova, Priorizada, Paralizada, Em andamento, Teste de Qualidade, Em Ajuste, Concluído, Fechada, Cancelada) e/ou tracker (tipo da tarefa, ex: Bug, Feature, Task). Use redmine_list_trackers pra ver os nomes exatos disponíveis.",
       inputSchema: {
-        status: z.enum(STATUS_NAMES).describe("Nome exato do status no Redmine"),
+        status: z.enum(STATUS_NAMES).optional().describe("Nome exato do status no Redmine"),
+        tracker: z.string().optional().describe("Nome exato do tracker/tipo no Redmine, ex: Bug"),
         projectId: z
           .string()
           .optional()
@@ -58,9 +59,9 @@ function buildServer(apiKey: string): McpServer {
         limit: z.number().int().positive().max(200).optional().describe("Máximo de tarefas (default 100)"),
       },
     },
-    async ({ status, projectId, limit }) => {
+    async ({ status, tracker, projectId, limit }) => {
       try {
-        const issues = await listIssues({ statusName: status, projectId, limit, apiKey });
+        const issues = await listIssues({ statusName: status, trackerName: tracker, projectId, limit, apiKey });
         return textResult(issues);
       } catch (err) {
         return errorResult(err);
@@ -119,6 +120,23 @@ function buildServer(apiKey: string): McpServer {
       try {
         const statuses = await getIssueStatuses(apiKey);
         return textResult(statuses);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_list_trackers",
+    {
+      title: "Listar trackers (tipos de tarefa) disponíveis no Redmine",
+      description: "Lista os trackers/tipos de tarefa configurados no Redmine (nome + id), ex: Bug, Feature, Task.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const trackers = await getIssueTrackers(apiKey);
+        return textResult(trackers);
       } catch (err) {
         return errorResult(err);
       }
