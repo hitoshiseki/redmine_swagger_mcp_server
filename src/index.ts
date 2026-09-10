@@ -8,7 +8,16 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 config({ path: join(dirname(fileURLToPath(import.meta.url)), "..", ".env"), quiet: true });
 
-const { getIssueStatuses, getIssueTrackers, listIssues, getIssues, updateIssueStatus } = await import("./redmine.js");
+const {
+  getIssueStatuses,
+  getIssueTrackers,
+  getIssuePriorities,
+  listIssues,
+  getIssues,
+  updateIssueStatus,
+  createIssue,
+  updateIssue,
+} = await import("./redmine.js");
 const { searchApiEndpoints, getApiEndpoint } = await import("./swagger.js");
 
 const STATUS_NAMES = [
@@ -137,6 +146,100 @@ function buildServer(apiKey: string): McpServer {
       try {
         const trackers = await getIssueTrackers(apiKey);
         return textResult(trackers);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_list_priorities",
+    {
+      title: "Listar prioridades disponíveis no Redmine",
+      description: "Lista as prioridades de tarefa configuradas no Redmine (nome + id).",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const priorities = await getIssuePriorities(apiKey);
+        return textResult(priorities);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_create_issue",
+    {
+      title: "Criar uma nova tarefa no Redmine",
+      description:
+        "Cria uma nova tarefa no Redmine. IMPORTANTE: antes de chamar essa tool, monte e mostre pro usuário o texto final da tarefa (assunto, descrição, tracker, prioridade, responsável, projeto) e só chame a tool depois que o usuário confirmar explicitamente. O parâmetro confirmado precisa ser true — nunca assuma confirmação, sempre peça.",
+      inputSchema: {
+        confirmado: z
+          .literal(true)
+          .describe("Só true depois que o usuário viu o texto final e confirmou explicitamente a criação"),
+        subject: z.string().min(1).describe("Título/assunto da tarefa"),
+        description: z.string().optional().describe("Descrição da tarefa"),
+        tracker: z.string().optional().describe("Nome exato do tracker/tipo, ex: Bug, Feature, Task"),
+        priority: z.string().optional().describe("Nome exato da prioridade, ex: Normal, Alta, Urgente"),
+        assignedToId: z.number().int().positive().optional().describe("Id do usuário responsável pela tarefa"),
+        projectId: z
+          .string()
+          .optional()
+          .describe("ID do projeto Redmine. Se omitido, usa REDMINE_DEFAULT_PROJECT_ID do .env"),
+      },
+    },
+    async ({ subject, description, tracker, priority, assignedToId, projectId }) => {
+      try {
+        const issue = await createIssue({
+          projectId,
+          subject,
+          description,
+          trackerName: tracker,
+          priorityName: priority,
+          assignedToId,
+          apiKey,
+        });
+        return textResult(issue);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_update_issue",
+    {
+      title: "Editar uma tarefa existente no Redmine",
+      description:
+        "Edita campos de uma tarefa existente no Redmine (assunto, descrição, tracker, prioridade, status, responsável). IMPORTANTE: antes de chamar essa tool, monte e mostre pro usuário o texto final com as mudanças propostas e só chame a tool depois que o usuário confirmar explicitamente. O parâmetro confirmado precisa ser true — nunca assuma confirmação, sempre peça. Para trocar só o status, prefira redmine_update_issue_status.",
+      inputSchema: {
+        confirmado: z
+          .literal(true)
+          .describe("Só true depois que o usuário viu o texto final e confirmou explicitamente a edição"),
+        issueId: z.number().int().positive().describe("Id da tarefa"),
+        subject: z.string().optional().describe("Novo título/assunto"),
+        description: z.string().optional().describe("Nova descrição"),
+        tracker: z.string().optional().describe("Novo tracker/tipo, ex: Bug, Feature, Task"),
+        priority: z.string().optional().describe("Nova prioridade, ex: Normal, Alta, Urgente"),
+        status: z.enum(STATUS_NAMES).optional().describe("Novo status"),
+        assignedToId: z.number().int().positive().optional().describe("Id do novo responsável"),
+      },
+    },
+    async ({ issueId, subject, description, tracker, priority, status, assignedToId }) => {
+      try {
+        await updateIssue({
+          issueId,
+          subject,
+          description,
+          trackerName: tracker,
+          priorityName: priority,
+          statusName: status,
+          assignedToId,
+          apiKey,
+        });
+        return textResult({ issueId, updated: true });
       } catch (err) {
         return errorResult(err);
       }

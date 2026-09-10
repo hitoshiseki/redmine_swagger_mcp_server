@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Guia MCP NexusGOV Redmine</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: #1f2430;
+    line-height: 1.55;
+    font-size: 13.5px;
+  }
+  .cover {
+    height: 250mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    page-break-after: always;
+    border-left: 8px solid #b1361e;
+    padding-left: 28px;
+  }
+  .cover .kicker {
+    color: #b1361e;
+    font-weight: 700;
+    letter-spacing: 2px;
+    font-size: 13px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .cover h1 {
+    font-size: 38px;
+    margin: 0 0 12px 0;
+    line-height: 1.15;
+  }
+  .cover p.sub {
+    font-size: 16px;
+    color: #555;
+    max-width: 440px;
+  }
+  .cover .footer-note {
+    margin-top: 60px;
+    font-size: 12px;
+    color: #999;
+  }
+  h2 {
+    color: #b1361e;
+    font-size: 20px;
+    border-bottom: 2px solid #b1361e;
+    padding-bottom: 6px;
+    margin-top: 36px;
+  }
+  h3 {
+    font-size: 15px;
+    color: #1f2430;
+    margin-top: 22px;
+  }
+  .platform-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+  }
+  .tag-mac { background: #eef1fb; color: #3a4fb1; }
+  .tag-win { background: #eaf6fb; color: #1178a3; }
+  .tag-claude { background: #fbf0ee; color: #b1361e; }
+  .tag-codex { background: #eef6ee; color: #3a8a4a; }
+  .step {
+    display: flex;
+    gap: 14px;
+    margin: 18px 0;
+    page-break-inside: avoid;
+  }
+  .step .num {
+    flex: 0 0 30px;
+    height: 30px;
+    background: #b1361e;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .step .content { flex: 1; }
+  .step .content strong { display: block; margin-bottom: 4px; font-size: 14px; }
+  code, pre {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+  }
+  pre {
+    background: #1f2430;
+    color: #e8e8e8;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 8px 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  code.inline {
+    background: #f1ece9;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #b1361e;
+  }
+  .box {
+    background: #fbf3ef;
+    border-left: 4px solid #b1361e;
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+  }
+  .box.tip { background: #eef6ee; border-left-color: #3a8a4a; }
+  .box.warn { background: #fff6e0; border-left-color: #c98a12; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid #e3ddd8;
+  }
+  th { background: #f7f2ef; color: #1f2430; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  .example {
+    background: #f7f2ef;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 6px 0;
+    font-style: italic;
+    color: #444;
+  }
+  .two-col {
+    display: flex;
+    gap: 16px;
+    margin: 12px 0;
+  }
+  .two-col > div {
+    flex: 1;
+    border: 1px solid #e3ddd8;
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .section-break { page-break-before: always; }
+  .footer {
+    margin-top: 50px;
+    font-size: 11px;
+    color: #999;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="kicker">Guia Rápido</div>
+  <h1>Como usar o MCP<br>NexusGOV&nbsp;Redmine</h1>
+  <p class="sub">Passo a passo simples para conectar sua conta do Redmine ao Claude Code ou ao Codex CLI e começar a consultar tarefas por conversa — no Mac ou no Windows.</p>
+  <div class="footer-note">Versão para uso interno &middot; Modo Portainer (recomendado, sem instalar nada)</div>
+</div>
+
+<h2>O que é isso?</h2>
+<p>Este é um "conector" (chamado de <strong>MCP</strong>) que liga assistentes de IA como o <strong>Claude Code</strong> e o <strong>Codex CLI</strong> diretamente ao Redmine da NexusGOV. Depois de configurado uma única vez, você pode simplesmente <strong>conversar</strong> pedindo coisas como "quais são minhas tarefas em aberto?" ou "muda a tarefa 123 para em andamento", e o assistente faz isso por você, sem precisar abrir o Redmine no navegador.</p>
+
+<div class="box tip">
+  <strong>Não precisa instalar nada.</strong> O servidor já roda centralizado no endereço abaixo. Você só precisa rodar um comando (ou colar um trecho de configuração), uma única vez, para conectar sua conta.
+</div>
+
+<h2>O que você vai precisar</h2>
+<ul>
+  <li>O Claude Code <strong>ou</strong> o Codex CLI já instalado no seu computador (se não tiver, peça ajuda ao time técnico)</li>
+  <li>Acesso ao Redmine da NexusGOV com seu usuário e senha</li>
+</ul>
+
+<div class="box">
+  <strong>Endereço do servidor:</strong> <code class="inline">http://45.79.207.184:3001</code>
+  <br>Esse endereço já vem pronto nos comandos deste guia — não precisa trocar nada.
+</div>
+
+<h2>Passo 1 — Pegue sua chave de acesso pessoal no Redmine</h2>
+<p>Vale para Mac, Windows, Claude ou Codex — esse passo é sempre o mesmo:</p>
+<div class="step">
+  <div class="num">1</div>
+  <div class="content">
+    Entre no Redmine normalmente pelo navegador, em <code class="inline">https://sistemas.sofintech.com.br/redmine</code>.
+  </div>
+</div>
+<div class="step">
+  <div class="num">2</div>
+  <div class="content">
+    No canto superior direito, clique em <strong>Minha conta</strong>.
+  </div>
+</div>
+<div class="step">
+  <div class="num">3</div>
+  <div class="content">
+    Procure por <strong>Chave de acesso à API</strong> e clique para mostrar (ou gerar, se ainda não existir). Copie esse código — ele é como uma senha especial só sua, não compartilhe com ninguém.
+  </div>
+</div>
+
+<div class="section-break"></div>
+
+<h2>Passo 2 — Escolha seu assistente</h2>
+<p>Siga apenas a seção do assistente que você usa. Em todos os casos, troque <code class="inline">SUA_KEY_PESSOAL</code> pela chave copiada no Passo 1.</p>
+
+<span class="platform-tag tag-claude">Claude Code</span>
+<h3>Mac</h3>
+<div class="step">
+  <div class="num">1</div>
+  <div class="content">
+    <strong>Abra o Terminal</strong>
+    Aperte <code class="inline">Cmd + Espaço</code>, digite "Terminal" e aperte Enter.
+  </div>
+</div>
+<div class="step">
+  <div class="num">2</div>
+  <div class="content">
+    <strong>Cole o comando abaixo e aperte Enter</strong>
+    <pre>claude mcp add --transport sse --scope user nexusgov-redmine http://45.79.207.184:3001/sse --header "X-Redmine-Api-Key: SUA_KEY_PESSOAL"</pre>
+  </div>
+</div>
+<div class="step">
+  <div class="num">3</div>
+  <div class="content">
+    <strong>Feche e abra o Claude Code de novo</strong>
+    Isso faz ele reconhecer a nova conexão.
+  </div>
+</div>
+
+<h3>Windows</h3>
+<div class="step">
+  <div class="num">1</div>
+  <div class="content">
+    <strong>Abra o PowerShell</strong>
+    Clique no menu Iniciar, digite "PowerShell" e aperte Enter.
+  </div>
+</div>
+<div class="step">
+  <div class="num">2</div>
+  <div class="content">
+    <strong>Cole o comando abaixo e aperte Enter</strong> (é o mesmo comando do Mac)
+    <pre>claude mcp add --transport sse --scope user nexusgov-redmine http://45.79.207.184:3001/sse --header "X-Redmine-Api-Key: SUA_KEY_PESSOAL"</pre>
+  </div>
+</div>
+<div class="step">
+  <div class="num">3</div>
+  <div class="content">
+    <strong>Feche e abra o Claude Code de novo</strong>
+  </div>
+</div>
+
+<div class="box tip">
+  <strong>Conferir se conectou (Mac ou Windows):</strong>
+  <pre>claude mcp list</pre>
+  Deve aparecer <code class="inline">nexusgov-redmine ... ✓ Connected</code>
+</div>
+
+<div class="section-break"></div>
+
+<span class="platform-tag tag-codex">Codex CLI</span>
+<p>No Codex, a conexão é feita editando um arquivo de configuração chamado <code class="inline">config.toml</code>. Não precisa saber programar — é só abrir o arquivo (ou criar, se não existir), colar o texto abaixo no final e salvar.</p>
+
+<h3>Mac</h3>
+<div class="step">
+  <div class="num">1</div>
+  <div class="content">
+    <strong>Localize o arquivo</strong>
+    Ele fica em <code class="inline">~/.codex/config.toml</code> (dentro da sua pasta de usuário, em uma pasta oculta chamada <code class="inline">.codex</code>). Se a pasta ou o arquivo não existirem, pode criar.
+  </div>
+</div>
+
+<h3>Windows</h3>
+<div class="step">
+  <div class="num">1</div>
+  <div class="content">
+    <strong>Localize o arquivo</strong>
+    Ele fica em <code class="inline">%USERPROFILE%\.codex\config.toml</code> — normalmente algo como <code class="inline">C:\Users\SEU_USUARIO\.codex\config.toml</code>. Se a pasta ou o arquivo não existirem, pode criar.
+  </div>
+</div>
+
+<h3>Conteúdo a colar (Mac ou Windows)</h3>
+<div class="step">
+  <div class="num">2</div>
+  <div class="content">
+    <strong>Abra o arquivo em um editor de texto</strong> (Bloco de Notas no Windows, TextEdit no Mac) e cole no final:
+    <pre>[mcp_servers.nexusgov-redmine]
+url = "http://45.79.207.184:3001/sse"
+headers = { "X-Redmine-Api-Key" = "SUA_KEY_PESSOAL" }</pre>
+  </div>
+</div>
+<div class="step">
+  <div class="num">3</div>
+  <div class="content">
+    <strong>Salve o arquivo e reinicie o Codex CLI</strong>
+    Feche a janela do terminal onde o Codex está rodando e abra de novo.
+  </div>
+</div>
+
+<div class="box warn">
+  <strong>Se der erro de conexão (Claude ou Codex):</strong> confira se colou a chave sem espaços extras e se o endereço está exatamente <code class="inline">http://45.79.207.184:3001/sse</code>. Se continuar com problema, chame o time técnico.
+</div>
+
+<div class="section-break"></div>
+
+<h2>O que você pode pedir</h2>
+<p>Depois de conectado, é só escrever em português normal, tanto no Claude Code quanto no Codex. Alguns exemplos:</p>
+
+<h3>Ver tarefas</h3>
+<div class="example">"Liste minhas tarefas em aberto no projeto X"</div>
+<div class="example">"Mostra os detalhes da tarefa 4521"</div>
+
+<h3>Mudar status de uma tarefa</h3>
+<div class="example">"Muda a tarefa 4521 para 'Em andamento'"</div>
+<div class="example">"Quais status existem no Redmine?"</div>
+
+<h3>Criar uma tarefa nova</h3>
+<div class="example">"Cria uma tarefa nova no projeto X pra corrigir o botão de login"</div>
+<div class="box tip">
+  Antes de criar, o assistente sempre vai <strong>mostrar o texto final</strong> da tarefa (assunto, descrição, tipo, prioridade, responsável) e pedir sua confirmação. Nada é criado sem você aprovar.
+</div>
+
+<h3>Editar uma tarefa existente</h3>
+<div class="example">"Muda a prioridade da tarefa 4521 pra Urgente e atualiza a descrição"</div>
+<div class="box tip">
+  Assim como na criação, o assistente mostra as mudanças propostas antes de salvar e só edita depois que você confirmar.
+</div>
+
+<h3>Consultar a documentação do sistema (Swagger)</h3>
+<div class="example">"Procura no swagger algum endpoint de login"</div>
+<div class="example">"Mostra o contrato completo do endpoint de cadastro de usuário"</div>
+
+<h2>Tabela de funções disponíveis</h2>
+<table>
+  <tr><th>O que faz</th><th>Exemplo de pedido</th></tr>
+  <tr><td>Listar tarefas de um projeto por status</td><td>"Liste as tarefas pendentes do projeto Y"</td></tr>
+  <tr><td>Ver detalhes de uma ou mais tarefas</td><td>"Mostra a tarefa 100 e a 101"</td></tr>
+  <tr><td>Criar uma tarefa nova (pede confirmação antes)</td><td>"Cria uma tarefa pra revisar o contrato Z"</td></tr>
+  <tr><td>Editar assunto, descrição, tipo, prioridade ou responsável (pede confirmação antes)</td><td>"Muda o responsável da tarefa 100 pro João"</td></tr>
+  <tr><td>Mudar o status de uma tarefa</td><td>"Fecha a tarefa 100"</td></tr>
+  <tr><td>Listar status disponíveis no Redmine</td><td>"Quais status existem?"</td></tr>
+  <tr><td>Listar tipos de tarefa (trackers)</td><td>"Quais tipos de tarefa existem?"</td></tr>
+  <tr><td>Listar prioridades disponíveis</td><td>"Quais prioridades existem?"</td></tr>
+  <tr><td>Buscar um endpoint da API por texto</td><td>"Procura endpoint de relatório"</td></tr>
+  <tr><td>Ver o contrato completo de um endpoint</td><td>"Detalha o endpoint /api/users"</td></tr>
+</table>
+
+<div class="box tip">
+  <strong>Dica:</strong> Você não precisa saber os nomes técnicos das funções acima. Basta pedir do jeito que você falaria com uma pessoa.
+</div>
+
+<h2>Dúvidas frequentes</h2>
+
+<h3>Preciso repetir esse processo toda vez que abrir o assistente?</h3>
+<p>Não. A conexão é feita uma única vez por computador. Depois disso, ele já sabe se conectar ao Redmine automaticamente sempre que você abrir uma nova conversa.</p>
+
+<h3>Minha chave de API é segura?</h3>
+<p>Sim, ela fica salva só no seu computador e é usada apenas para identificar você no Redmine. Nunca compartilhe essa chave com outras pessoas.</p>
+
+<h3>Trocaram meu computador ou reinstalei o programa. E agora?</h3>
+<p>Basta repetir o Passo 2 (comando ou arquivo de configuração) na máquina nova.</p>
+
+<h3>Uso Mac num trabalho e Windows em casa, dá pra usar nos dois?</h3>
+<p>Sim. É só repetir a configuração em cada computador, usando sempre sua própria chave pessoal.</p>
+
+<h3>Quem eu chamo se algo não funcionar?</h3>
+<p>Entre em contato com o time técnico responsável pelo MCP NexusGOV Redmine.</p>
+
+<div class="footer">Guia gerado para uso interno &middot; NexusGOV</div>
+
+</body>
+</html>

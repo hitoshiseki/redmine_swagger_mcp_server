@@ -8,12 +8,20 @@ Dois modos de uso:
 
 ## Tools
 
-- `redmine_list_issues` — tarefas de um projeto por status
+- `redmine_list_issues` — tarefas de um projeto por status e/ou tracker
 - `redmine_get_issues` — detalhe de 1+ tarefas por id
+- `redmine_create_issue` — cria uma nova tarefa (exige confirmação do usuário, ver abaixo)
+- `redmine_update_issue` — edita campos de uma tarefa existente (exige confirmação do usuário, ver abaixo)
 - `redmine_update_issue_status` — muda status de uma tarefa
 - `redmine_list_statuses` — lista status configurados no Redmine (nome + id)
+- `redmine_list_trackers` — lista trackers/tipos de tarefa (nome + id)
+- `redmine_list_priorities` — lista prioridades (nome + id)
 - `api_search_endpoints` — busca endpoints no swagger por texto livre
 - `api_get_endpoint` — contrato completo de um endpoint (schemas resolvidos)
+
+### Criar/editar tarefa exige confirmação
+
+`redmine_create_issue` e `redmine_update_issue` têm um parâmetro obrigatório `confirmado: true`. A descrição da tool instrui o agente a montar e mostrar o texto final (assunto, descrição, tracker, prioridade, responsável) pro usuário antes de chamar a tool — só marcar `confirmado: true` depois que o usuário aprovar explicitamente. Isso é reforçado por instrução no prompt da tool, não é uma trava do servidor.
 
 ---
 

@@ -15,6 +15,11 @@ interface RedmineTracker {
   name: string;
 }
 
+interface RedminePriority {
+  id: number;
+  name: string;
+}
+
 interface RedmineIssue {
   id: number;
   project: { id: number; name: string };
@@ -32,6 +37,7 @@ interface RedmineIssue {
 
 let statusCache: RedmineStatus[] | null = null;
 let trackerCache: RedmineTracker[] | null = null;
+let priorityCache: RedminePriority[] | null = null;
 
 async function redmineFetch(path: string, apiKey: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(`${REDMINE_URL}${path}`, {
@@ -65,6 +71,14 @@ export async function getIssueTrackers(apiKey: string): Promise<RedmineTracker[]
   return trackerCache;
 }
 
+export async function getIssuePriorities(apiKey: string): Promise<RedminePriority[]> {
+  if (priorityCache) return priorityCache;
+  const res = await redmineFetch("/enumerations/issue_priorities.json", apiKey);
+  const data = (await res.json()) as { issue_priorities: RedminePriority[] };
+  priorityCache = data.issue_priorities;
+  return priorityCache;
+}
+
 async function resolveTrackerId(trackerName: string, apiKey: string): Promise<number> {
   const trackers = await getIssueTrackers(apiKey);
   const match = trackers.find(
@@ -85,6 +99,18 @@ async function resolveStatusId(statusName: string, apiKey: string): Promise<numb
   if (!match) {
     const names = statuses.map((s) => s.name).join(", ");
     throw new Error(`Status "${statusName}" não encontrado no Redmine. Status disponíveis: ${names}`);
+  }
+  return match.id;
+}
+
+async function resolvePriorityId(priorityName: string, apiKey: string): Promise<number> {
+  const priorities = await getIssuePriorities(apiKey);
+  const match = priorities.find(
+    (p) => p.name.toLowerCase() === priorityName.toLowerCase(),
+  );
+  if (!match) {
+    const names = priorities.map((p) => p.name).join(", ");
+    throw new Error(`Prioridade "${priorityName}" não encontrada no Redmine. Prioridades disponíveis: ${names}`);
   }
   return match.id;
 }
@@ -136,5 +162,63 @@ export async function updateIssueStatus(issueId: number, statusName: string, api
   await redmineFetch(`/issues/${issueId}.json`, apiKey, {
     method: "PUT",
     body: JSON.stringify({ issue: { status_id: statusId } }),
+  });
+}
+
+export async function createIssue(params: {
+  projectId?: string;
+  subject: string;
+  description?: string;
+  trackerName?: string;
+  priorityName?: string;
+  assignedToId?: number;
+  apiKey: string;
+}): Promise<RedmineIssue> {
+  const projectId = params.projectId ?? REDMINE_DEFAULT_PROJECT_ID;
+  if (!projectId) {
+    throw new Error("projectId não informado e REDMINE_DEFAULT_PROJECT_ID não configurado");
+  }
+  const issue: Record<string, unknown> = {
+    project_id: projectId,
+    subject: params.subject,
+  };
+  if (params.description !== undefined) issue.description = params.description;
+  if (params.trackerName) issue.tracker_id = await resolveTrackerId(params.trackerName, params.apiKey);
+  if (params.priorityName) issue.priority_id = await resolvePriorityId(params.priorityName, params.apiKey);
+  if (params.assignedToId !== undefined) issue.assigned_to_id = params.assignedToId;
+
+  const res = await redmineFetch("/issues.json", params.apiKey, {
+    method: "POST",
+    body: JSON.stringify({ issue }),
+  });
+  const data = (await res.json()) as { issue: RedmineIssue };
+  return data.issue;
+}
+
+export async function updateIssue(params: {
+  issueId: number;
+  subject?: string;
+  description?: string;
+  trackerName?: string;
+  priorityName?: string;
+  statusName?: string;
+  assignedToId?: number;
+  apiKey: string;
+}): Promise<void> {
+  const issue: Record<string, unknown> = {};
+  if (params.subject !== undefined) issue.subject = params.subject;
+  if (params.description !== undefined) issue.description = params.description;
+  if (params.trackerName) issue.tracker_id = await resolveTrackerId(params.trackerName, params.apiKey);
+  if (params.priorityName) issue.priority_id = await resolvePriorityId(params.priorityName, params.apiKey);
+  if (params.statusName) issue.status_id = await resolveStatusId(params.statusName, params.apiKey);
+  if (params.assignedToId !== undefined) issue.assigned_to_id = params.assignedToId;
+
+  if (Object.keys(issue).length === 0) {
+    throw new Error("Nenhum campo informado para atualizar");
+  }
+
+  await redmineFetch(`/issues/${params.issueId}.json`, params.apiKey, {
+    method: "PUT",
+    body: JSON.stringify({ issue }),
   });
 }
