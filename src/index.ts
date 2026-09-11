@@ -34,7 +34,7 @@ const STATUS_NAMES = [
 
 function textResult(data: unknown) {
   return {
-    content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
+    content: [{ type: "text" as const, text: JSON.stringify(data) }],
   };
 }
 
@@ -71,7 +71,7 @@ async function askCrossCheckApi(server: McpServer): Promise<boolean | null> {
 }
 
 function textResultRedmine(data: unknown, crossCheck: boolean | null) {
-  const base = JSON.stringify(data, null, 2);
+  const base = JSON.stringify(data);
   const hint = crossCheck === true ? CROSS_CHECK_ACCEPTED_HINT : CROSS_CHECK_FALLBACK_HINT;
   return {
     content: [{ type: "text" as const, text: base + hint }],

@@ -32,7 +32,73 @@ interface RedmineIssue {
   description: string;
   created_on: string;
   updated_on: string;
-  journals?: unknown[];
+  journals?: RedmineJournal[];
+}
+
+interface RedmineJournal {
+  id: number;
+  user: { id: number; name: string };
+  notes: string;
+  created_on: string;
+  details?: { property: string; name: string; old_value?: string; new_value?: string }[];
+}
+
+export interface CompactIssue {
+  id: number;
+  subject: string;
+  tracker: string;
+  status: string;
+  priority: string;
+  assignedTo?: string;
+}
+
+export interface DetailedIssue {
+  id: number;
+  subject: string;
+  description: string;
+  tracker: string;
+  status: string;
+  priority: string;
+  project: string;
+  author: string;
+  assignedTo?: string;
+  createdOn: string;
+  updatedOn: string;
+  journals?: { user: string; notes: string; createdOn: string }[];
+}
+
+function toCompactIssue(raw: RedmineIssue): CompactIssue {
+  return {
+    id: raw.id,
+    subject: raw.subject,
+    tracker: raw.tracker.name,
+    status: raw.status.name,
+    priority: raw.priority.name,
+    ...(raw.assigned_to ? { assignedTo: raw.assigned_to.name } : {}),
+  };
+}
+
+function toDetailedIssue(raw: RedmineIssue): DetailedIssue {
+  return {
+    id: raw.id,
+    subject: raw.subject,
+    description: raw.description,
+    tracker: raw.tracker.name,
+    status: raw.status.name,
+    priority: raw.priority.name,
+    project: raw.project.name,
+    author: raw.author.name,
+    ...(raw.assigned_to ? { assignedTo: raw.assigned_to.name } : {}),
+    createdOn: raw.created_on,
+    updatedOn: raw.updated_on,
+    ...(raw.journals && raw.journals.length > 0
+      ? {
+          journals: raw.journals
+            .filter((j) => j.notes)
+            .map((j) => ({ user: j.user.name, notes: j.notes, createdOn: j.created_on })),
+        }
+      : {}),
+  };
 }
 
 let statusCache: RedmineStatus[] | null = null;
@@ -121,7 +187,7 @@ export async function listIssues(params: {
   trackerName?: string;
   limit?: number;
   apiKey: string;
-}): Promise<RedmineIssue[]> {
+}): Promise<CompactIssue[]> {
   const projectId = params.projectId ?? REDMINE_DEFAULT_PROJECT_ID;
   if (!projectId) {
     throw new Error("projectId não informado e REDMINE_DEFAULT_PROJECT_ID não configurado");
@@ -140,10 +206,10 @@ export async function listIssues(params: {
   }
   const res = await redmineFetch(`/projects/${projectId}/issues.json?${qs}`, params.apiKey);
   const data = (await res.json()) as { issues: RedmineIssue[] };
-  return data.issues;
+  return data.issues.map(toCompactIssue);
 }
 
-export async function getIssues(issueIds: number[], apiKey: string): Promise<RedmineIssue[]> {
+export async function getIssues(issueIds: number[], apiKey: string): Promise<DetailedIssue[]> {
   if (issueIds.length === 0) {
     throw new Error("issueIds vazio");
   }
@@ -154,7 +220,7 @@ export async function getIssues(issueIds: number[], apiKey: string): Promise<Red
   });
   const res = await redmineFetch(`/issues.json?${qs}`, apiKey);
   const data = (await res.json()) as { issues: RedmineIssue[] };
-  return data.issues;
+  return data.issues.map(toDetailedIssue);
 }
 
 export async function updateIssueStatus(issueId: number, statusName: string, apiKey: string): Promise<void> {
@@ -173,7 +239,7 @@ export async function createIssue(params: {
   priorityName?: string;
   assignedToId?: number;
   apiKey: string;
-}): Promise<RedmineIssue> {
+}): Promise<DetailedIssue> {
   const projectId = params.projectId ?? REDMINE_DEFAULT_PROJECT_ID;
   if (!projectId) {
     throw new Error("projectId não informado e REDMINE_DEFAULT_PROJECT_ID não configurado");
@@ -192,7 +258,7 @@ export async function createIssue(params: {
     body: JSON.stringify({ issue }),
   });
   const data = (await res.json()) as { issue: RedmineIssue };
-  return data.issue;
+  return toDetailedIssue(data.issue);
 }
 
 export async function updateIssue(params: {
