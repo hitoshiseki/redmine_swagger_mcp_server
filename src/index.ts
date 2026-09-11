@@ -38,6 +38,46 @@ function textResult(data: unknown) {
   };
 }
 
+const CROSS_CHECK_ACCEPTED_HINT =
+  "\n\nUsuário pediu pra cruzar com a API — use api_search_endpoints/api_get_endpoint pra comparar com os dados acima e apontar inconsistências.";
+const CROSS_CHECK_FALLBACK_HINT =
+  "\n\nDica: quer cruzar essa informação com a API (Swagger)? Use api_search_endpoints ou api_get_endpoint.";
+
+async function askCrossCheckApi(server: McpServer): Promise<boolean | null> {
+  try {
+    const result = await server.server.elicitInput({
+      mode: "form",
+      message: "Deseja cruzar essa informação do Redmine com a API (Swagger) para checar inconsistências/divergências?",
+      requestedSchema: {
+        type: "object",
+        properties: {
+          cruzar: {
+            type: "boolean",
+            title: "Cruzar com a API?",
+            description: "Se sim, o assistente vai buscar o endpoint correspondente na API pra comparar.",
+            default: false,
+          },
+        },
+        required: ["cruzar"],
+      },
+    });
+    if (result.action === "accept" && result.content) {
+      return Boolean(result.content.cruzar);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function textResultRedmine(data: unknown, crossCheck: boolean | null) {
+  const base = JSON.stringify(data, null, 2);
+  const hint = crossCheck === true ? CROSS_CHECK_ACCEPTED_HINT : CROSS_CHECK_FALLBACK_HINT;
+  return {
+    content: [{ type: "text" as const, text: base + hint }],
+  };
+}
+
 function errorResult(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
   return {
@@ -71,7 +111,8 @@ function buildServer(apiKey: string): McpServer {
     async ({ status, tracker, projectId, limit }) => {
       try {
         const issues = await listIssues({ statusName: status, trackerName: tracker, projectId, limit, apiKey });
-        return textResult(issues);
+        const crossCheck = await askCrossCheckApi(server);
+        return textResultRedmine(issues, crossCheck);
       } catch (err) {
         return errorResult(err);
       }
@@ -91,7 +132,8 @@ function buildServer(apiKey: string): McpServer {
     async ({ issueIds }) => {
       try {
         const issues = await getIssues(issueIds, apiKey);
-        return textResult(issues);
+        const crossCheck = await askCrossCheckApi(server);
+        return textResultRedmine(issues, crossCheck);
       } catch (err) {
         return errorResult(err);
       }
@@ -111,7 +153,8 @@ function buildServer(apiKey: string): McpServer {
     async ({ issueId, status }) => {
       try {
         await updateIssueStatus(issueId, status, apiKey);
-        return textResult({ issueId, status, updated: true });
+        const crossCheck = await askCrossCheckApi(server);
+        return textResultRedmine({ issueId, status, updated: true }, crossCheck);
       } catch (err) {
         return errorResult(err);
       }
@@ -201,7 +244,8 @@ function buildServer(apiKey: string): McpServer {
           assignedToId,
           apiKey,
         });
-        return textResult(issue);
+        const crossCheck = await askCrossCheckApi(server);
+        return textResultRedmine(issue, crossCheck);
       } catch (err) {
         return errorResult(err);
       }
@@ -239,7 +283,8 @@ function buildServer(apiKey: string): McpServer {
           assignedToId,
           apiKey,
         });
-        return textResult({ issueId, updated: true });
+        const crossCheck = await askCrossCheckApi(server);
+        return textResultRedmine({ issueId, updated: true }, crossCheck);
       } catch (err) {
         return errorResult(err);
       }

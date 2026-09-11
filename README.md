@@ -23,6 +23,10 @@ Dois modos de uso:
 
 `redmine_create_issue` e `redmine_update_issue` têm um parâmetro obrigatório `confirmado: true`. A descrição da tool instrui o agente a montar e mostrar o texto final (assunto, descrição, tracker, prioridade, responsável) pro usuário antes de chamar a tool — só marcar `confirmado: true` depois que o usuário aprovar explicitamente. Isso é reforçado por instrução no prompt da tool, não é uma trava do servidor.
 
+### Sugestão de cruzar com a API
+
+Toda tool `redmine_*` pergunta, ao final, se o usuário quer cruzar aquela informação com a API (swagger) pra checar inconsistências. Em clients que suportam a capability de *elicitation* do MCP (ex: form/dialog nativo), aparece uma caixa de diálogo real com opção sim/não. Em clients sem suporte a elicitation, a tool cai num fallback simples: um texto sugerindo usar `api_search_endpoints`/`api_get_endpoint`.
+
 ---
 
 ## Modo Portainer (centralizado)
