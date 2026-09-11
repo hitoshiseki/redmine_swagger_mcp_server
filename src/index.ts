@@ -18,6 +18,13 @@ const {
   createIssue,
   updateIssue,
   toSummaryIssue,
+  addNote,
+  getIssueJournals,
+  updateCustomFields,
+  listRelations,
+  listChildren,
+  searchIssues,
+  attachFile,
 } = await import("./redmine.js");
 const { searchApiEndpoints, getApiEndpoint } = await import("./swagger.js");
 
@@ -114,11 +121,12 @@ function buildServer(apiKey: string): McpServer {
       inputSchema: {
         issueId: z.number().int().positive().describe("Id da tarefa"),
         status: z.enum(STATUS_NAMES).describe("Novo status"),
+        notes: z.string().optional().describe("Comentário opcional explicando o motivo da mudança de status"),
       },
     },
-    async ({ issueId, status }) => {
+    async ({ issueId, status, notes }) => {
       try {
-        await updateIssueStatus(issueId, status, apiKey);
+        await updateIssueStatus(issueId, status, apiKey, notes);
         return textResult({ issueId, status, updated: true });
       } catch (err) {
         return errorResult(err);
@@ -196,9 +204,10 @@ function buildServer(apiKey: string): McpServer {
           .string()
           .optional()
           .describe("ID do projeto Redmine. Se omitido, usa REDMINE_DEFAULT_PROJECT_ID do .env"),
+        parentIssueId: z.number().int().positive().optional().describe("Id da tarefa-mãe, pra criar como subtarefa"),
       },
     },
-    async ({ subject, description, tracker, priority, assignedToId, projectId }) => {
+    async ({ subject, description, tracker, priority, assignedToId, projectId, parentIssueId }) => {
       try {
         const issue = await createIssue({
           projectId,
@@ -207,6 +216,7 @@ function buildServer(apiKey: string): McpServer {
           trackerName: tracker,
           priorityName: priority,
           assignedToId,
+          parentIssueId,
           apiKey,
         });
         return textResult(issue);
@@ -233,9 +243,10 @@ function buildServer(apiKey: string): McpServer {
         priority: z.string().optional().describe("Nova prioridade, ex: Normal, Alta, Urgente"),
         status: z.enum(STATUS_NAMES).optional().describe("Novo status"),
         assignedToId: z.number().int().positive().optional().describe("Id do novo responsável"),
+        notes: z.string().min(1).describe("Comentário obrigatório explicando o motivo da alteração"),
       },
     },
-    async ({ issueId, subject, description, tracker, priority, status, assignedToId }) => {
+    async ({ issueId, subject, description, tracker, priority, status, assignedToId, notes }) => {
       try {
         await updateIssue({
           issueId,
@@ -245,9 +256,168 @@ function buildServer(apiKey: string): McpServer {
           priorityName: priority,
           statusName: status,
           assignedToId,
+          notes,
           apiKey,
         });
         return textResult({ issueId, updated: true });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_add_note",
+    {
+      title: "Comentar uma tarefa do Redmine sem alterar campos",
+      description:
+        "Adiciona um comentário (nota) numa tarefa do Redmine, sem tocar em assunto/descrição/status. IMPORTANTE: antes de chamar essa tool, mostre pro usuário o texto final do comentário e só chame a tool depois que o usuário confirmar explicitamente. O parâmetro confirmado precisa ser true — nunca assuma confirmação, sempre peça.",
+      inputSchema: {
+        confirmado: z
+          .literal(true)
+          .describe("Só true depois que o usuário viu o texto final e confirmou explicitamente o comentário"),
+        issueId: z.number().int().positive().describe("Id da tarefa"),
+        notes: z.string().min(1).describe("Texto do comentário"),
+        privateNotes: z.boolean().optional().describe("Se true, comentário fica visível só pra usuários internos (default false)"),
+      },
+    },
+    async ({ issueId, notes, privateNotes }) => {
+      try {
+        await addNote(issueId, notes, privateNotes, apiKey);
+        return textResult({ issueId, noteAdded: true });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_get_issue_journals",
+    {
+      title: "Histórico completo de uma tarefa do Redmine",
+      description:
+        "Busca o histórico completo (journals) de uma tarefa: todos os comentários e todas as mudanças de campo (com valor antigo e novo), inclusive journals sem comentário. Use quando precisar comparar versões da descrição ou ver quem mudou o quê.",
+      inputSchema: {
+        issueId: z.number().int().positive().describe("Id da tarefa"),
+      },
+    },
+    async ({ issueId }) => {
+      try {
+        const journals = await getIssueJournals(issueId, apiKey);
+        return textResult(journals);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_update_custom_fields",
+    {
+      title: "Preencher campos personalizados de uma tarefa do Redmine",
+      description:
+        "Atualiza campos personalizados de uma tarefa (ex: 'Cenários de Teste' id 7, 'Frontend Concluído' id 20). IMPORTANTE: antes de chamar essa tool, mostre pro usuário os campos e valores finais e só chame a tool depois que o usuário confirmar explicitamente. O parâmetro confirmado precisa ser true — nunca assuma confirmação, sempre peça.",
+      inputSchema: {
+        confirmado: z
+          .literal(true)
+          .describe("Só true depois que o usuário viu os campos finais e confirmou explicitamente a edição"),
+        issueId: z.number().int().positive().describe("Id da tarefa"),
+        fields: z
+          .array(z.object({ id: z.number().int().positive(), value: z.string() }))
+          .min(1)
+          .describe("Lista de campos personalizados a atualizar, com id e novo valor"),
+        notes: z.string().optional().describe("Comentário opcional explicando a alteração"),
+      },
+    },
+    async ({ issueId, fields, notes }) => {
+      try {
+        await updateCustomFields(issueId, fields, notes, apiKey);
+        return textResult({ issueId, updated: true });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_list_relations",
+    {
+      title: "Listar relações formais de uma tarefa do Redmine",
+      description: "Lista as relações (bloqueia, depende de, duplica, etc) de uma tarefa com outras tarefas.",
+      inputSchema: {
+        issueId: z.number().int().positive().describe("Id da tarefa"),
+      },
+    },
+    async ({ issueId }) => {
+      try {
+        const relations = await listRelations(issueId, apiKey);
+        return textResult(relations);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_list_children",
+    {
+      title: "Listar tarefas-filhas de uma tarefa-mãe no Redmine",
+      description: "Lista todas as subtarefas (qualquer status) de uma tarefa-mãe pelo id.",
+      inputSchema: {
+        parentId: z.number().int().positive().describe("Id da tarefa-mãe"),
+      },
+    },
+    async ({ parentId }) => {
+      try {
+        const children = await listChildren(parentId, apiKey);
+        return textResult(children);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_search_issues",
+    {
+      title: "Buscar tarefas do Redmine por palavra-chave",
+      description: "Busca tarefas do Redmine cujo texto (assunto/descrição) bate com a palavra-chave informada.",
+      inputSchema: {
+        query: z.string().min(1).describe("Texto a buscar"),
+      },
+    },
+    async ({ query }) => {
+      try {
+        const results = await searchIssues(query, apiKey);
+        return textResult(results);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "redmine_attach_file",
+    {
+      title: "Anexar arquivo a uma tarefa do Redmine",
+      description:
+        "Anexa um arquivo (conteúdo em base64) a uma tarefa do Redmine. IMPORTANTE: antes de chamar essa tool, confirme com o usuário o arquivo e a tarefa de destino. O parâmetro confirmado precisa ser true — nunca assuma confirmação, sempre peça.",
+      inputSchema: {
+        confirmado: z
+          .literal(true)
+          .describe("Só true depois que o usuário confirmou explicitamente o anexo"),
+        issueId: z.number().int().positive().describe("Id da tarefa"),
+        filename: z.string().min(1).describe("Nome do arquivo, com extensão"),
+        contentBase64: z.string().min(1).describe("Conteúdo do arquivo codificado em base64"),
+        description: z.string().optional().describe("Descrição opcional do anexo"),
+        notes: z.string().optional().describe("Comentário opcional explicando o anexo"),
+      },
+    },
+    async ({ issueId, filename, contentBase64, description, notes }) => {
+      try {
+        const fileContent = Buffer.from(contentBase64, "base64");
+        await attachFile({ issueId, fileContent, filename, description, notes, apiKey });
+        return textResult({ issueId, filename, attached: true });
       } catch (err) {
         return errorResult(err);
       }

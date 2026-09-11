@@ -10,9 +10,16 @@ Dois modos de uso:
 
 - `redmine_list_issues` — tarefas de um projeto por status e/ou tracker
 - `redmine_get_issues` — detalhe de 1+ tarefas por id
-- `redmine_create_issue` — cria uma nova tarefa (exige confirmação do usuário, ver abaixo)
-- `redmine_update_issue` — edita campos de uma tarefa existente (exige confirmação do usuário, ver abaixo)
-- `redmine_update_issue_status` — muda status de uma tarefa
+- `redmine_create_issue` — cria uma nova tarefa, opcionalmente como subtarefa (exige confirmação do usuário, ver abaixo)
+- `redmine_update_issue` — edita campos de uma tarefa existente, com `notes` obrigatório (exige confirmação do usuário, ver abaixo)
+- `redmine_update_issue_status` — muda status de uma tarefa, com `notes` opcional
+- `redmine_add_note` — comenta uma tarefa sem alterar campos (exige confirmação do usuário, ver abaixo)
+- `redmine_get_issue_journals` — histórico completo (comentários + mudanças de campo com valor antigo/novo)
+- `redmine_update_custom_fields` — preenche campos personalizados (exige confirmação do usuário, ver abaixo)
+- `redmine_list_relations` — relações formais entre tarefas (bloqueia, depende de, etc)
+- `redmine_list_children` — subtarefas de uma tarefa-mãe
+- `redmine_search_issues` — busca tarefas por palavra-chave
+- `redmine_attach_file` — anexa arquivo (base64) a uma tarefa (exige confirmação do usuário, ver abaixo)
 - `redmine_list_statuses` — lista status configurados no Redmine (nome + id)
 - `redmine_list_trackers` — lista trackers/tipos de tarefa (nome + id)
 - `redmine_list_priorities` — lista prioridades (nome + id)
@@ -21,7 +28,11 @@ Dois modos de uso:
 
 ### Criar/editar tarefa exige confirmação
 
-`redmine_create_issue` e `redmine_update_issue` têm um parâmetro obrigatório `confirmado: true`. A descrição da tool instrui o agente a montar e mostrar o texto final (assunto, descrição, tracker, prioridade, responsável) pro usuário antes de chamar a tool — só marcar `confirmado: true` depois que o usuário aprovar explicitamente. Isso é reforçado por instrução no prompt da tool, não é uma trava do servidor.
+`redmine_create_issue`, `redmine_update_issue`, `redmine_add_note`, `redmine_update_custom_fields` e
+`redmine_attach_file` têm um parâmetro obrigatório `confirmado: true`. A descrição da tool instrui o
+agente a montar e mostrar o texto final pro usuário antes de chamar a tool — só marcar `confirmado: true`
+depois que o usuário aprovar explicitamente. Isso é reforçado por instrução no prompt da tool, não é uma
+trava do servidor.
 
 ### `redmine_get_issues` resumido
 

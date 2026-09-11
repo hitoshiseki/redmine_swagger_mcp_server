@@ -151,6 +151,22 @@ async function redmineFetch(path: string, apiKey: string, init?: RequestInit): P
   return res;
 }
 
+async function redmineUpload(path: string, apiKey: string, body: Buffer): Promise<Response> {
+  const res = await fetch(`${REDMINE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      "X-Redmine-API-Key": apiKey,
+      "Content-Type": "application/octet-stream",
+    },
+    body: new Uint8Array(body),
+  });
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Redmine POST ${path} -> ${res.status} ${res.statusText}: ${errBody}`);
+  }
+  return res;
+}
+
 export async function getIssueStatuses(apiKey: string): Promise<RedmineStatus[]> {
   if (statusCache) return statusCache;
   const res = await redmineFetch("/issue_statuses.json", apiKey);
@@ -253,11 +269,16 @@ export async function getIssues(issueIds: number[], apiKey: string): Promise<Det
   return data.issues.map(toDetailedIssue);
 }
 
-export async function updateIssueStatus(issueId: number, statusName: string, apiKey: string): Promise<void> {
+export async function updateIssueStatus(
+  issueId: number,
+  statusName: string,
+  apiKey: string,
+  notes?: string,
+): Promise<void> {
   const statusId = await resolveStatusId(statusName, apiKey);
   await redmineFetch(`/issues/${issueId}.json`, apiKey, {
     method: "PUT",
-    body: JSON.stringify({ issue: { status_id: statusId } }),
+    body: JSON.stringify({ issue: { status_id: statusId, ...(notes ? { notes } : {}) } }),
   });
 }
 
@@ -268,6 +289,7 @@ export async function createIssue(params: {
   trackerName?: string;
   priorityName?: string;
   assignedToId?: number;
+  parentIssueId?: number;
   apiKey: string;
 }): Promise<DetailedIssue> {
   const projectId = params.projectId ?? REDMINE_DEFAULT_PROJECT_ID;
@@ -282,6 +304,7 @@ export async function createIssue(params: {
   if (params.trackerName) issue.tracker_id = await resolveTrackerId(params.trackerName, params.apiKey);
   if (params.priorityName) issue.priority_id = await resolvePriorityId(params.priorityName, params.apiKey);
   if (params.assignedToId !== undefined) issue.assigned_to_id = params.assignedToId;
+  if (params.parentIssueId !== undefined) issue.parent_issue_id = params.parentIssueId;
 
   const res = await redmineFetch("/issues.json", params.apiKey, {
     method: "POST",
@@ -299,6 +322,7 @@ export async function updateIssue(params: {
   priorityName?: string;
   statusName?: string;
   assignedToId?: number;
+  notes?: string;
   apiKey: string;
 }): Promise<void> {
   const issue: Record<string, unknown> = {};
@@ -308,6 +332,7 @@ export async function updateIssue(params: {
   if (params.priorityName) issue.priority_id = await resolvePriorityId(params.priorityName, params.apiKey);
   if (params.statusName) issue.status_id = await resolveStatusId(params.statusName, params.apiKey);
   if (params.assignedToId !== undefined) issue.assigned_to_id = params.assignedToId;
+  if (params.notes !== undefined) issue.notes = params.notes;
 
   if (Object.keys(issue).length === 0) {
     throw new Error("Nenhum campo informado para atualizar");
@@ -316,5 +341,142 @@ export async function updateIssue(params: {
   await redmineFetch(`/issues/${params.issueId}.json`, params.apiKey, {
     method: "PUT",
     body: JSON.stringify({ issue }),
+  });
+}
+
+export async function addNote(
+  issueId: number,
+  notes: string,
+  privateNotes: boolean | undefined,
+  apiKey: string,
+): Promise<void> {
+  await redmineFetch(`/issues/${issueId}.json`, apiKey, {
+    method: "PUT",
+    body: JSON.stringify({ issue: { notes, private_notes: privateNotes ?? false } }),
+  });
+}
+
+export interface JournalDetail {
+  property: string;
+  name: string;
+  oldValue?: string;
+  newValue?: string;
+}
+
+export interface Journal {
+  id: number;
+  user: string;
+  notes: string;
+  createdOn: string;
+  details: JournalDetail[];
+}
+
+export async function getIssueJournals(issueId: number, apiKey: string): Promise<Journal[]> {
+  const res = await redmineFetch(`/issues/${issueId}.json?include=journals`, apiKey);
+  const data = (await res.json()) as { issue: RedmineIssue };
+  return (data.issue.journals ?? []).map((j) => ({
+    id: j.id,
+    user: j.user.name,
+    notes: j.notes,
+    createdOn: j.created_on,
+    details: (j.details ?? []).map((d) => ({
+      property: d.property,
+      name: d.name,
+      oldValue: d.old_value,
+      newValue: d.new_value,
+    })),
+  }));
+}
+
+export async function updateCustomFields(
+  issueId: number,
+  fields: { id: number; value: string }[],
+  notes: string | undefined,
+  apiKey: string,
+): Promise<void> {
+  const customFields = fields.map((f) => ({ id: f.id, value: f.value }));
+  await redmineFetch(`/issues/${issueId}.json`, apiKey, {
+    method: "PUT",
+    body: JSON.stringify({ issue: { custom_fields: customFields, ...(notes ? { notes } : {}) } }),
+  });
+}
+
+export interface IssueRelation {
+  id: number;
+  issueId: number;
+  issueToId: number;
+  relationType: string;
+  delay?: number;
+}
+
+export async function listRelations(issueId: number, apiKey: string): Promise<IssueRelation[]> {
+  const res = await redmineFetch(`/issues/${issueId}/relations.json`, apiKey);
+  const data = (await res.json()) as {
+    relations: { id: number; issue_id: number; issue_to_id: number; relation_type: string; delay?: number }[];
+  };
+  return data.relations.map((r) => ({
+    id: r.id,
+    issueId: r.issue_id,
+    issueToId: r.issue_to_id,
+    relationType: r.relation_type,
+    delay: r.delay,
+  }));
+}
+
+export async function listChildren(parentId: number, apiKey: string): Promise<CompactIssue[]> {
+  const qs = new URLSearchParams({
+    parent_id: String(parentId),
+    status_id: "*",
+    limit: "100",
+  });
+  const res = await redmineFetch(`/issues.json?${qs}`, apiKey);
+  const data = (await res.json()) as { issues: RedmineIssue[] };
+  return data.issues.map(toCompactIssue);
+}
+
+export interface SearchResultItem {
+  id: number;
+  title: string;
+  type: string;
+  url: string;
+  description: string;
+  datetime: string;
+}
+
+export async function searchIssues(query: string, apiKey: string): Promise<SearchResultItem[]> {
+  const qs = new URLSearchParams({ q: query, issues: "1", limit: "50" });
+  const res = await redmineFetch(`/search.json?${qs}`, apiKey);
+  const data = (await res.json()) as { results: SearchResultItem[] };
+  return data.results;
+}
+
+export async function attachFile(params: {
+  issueId: number;
+  fileContent: Buffer;
+  filename: string;
+  description?: string;
+  notes?: string;
+  apiKey: string;
+}): Promise<void> {
+  const uploadRes = await redmineUpload(
+    `/uploads.json?${new URLSearchParams({ filename: params.filename })}`,
+    params.apiKey,
+    params.fileContent,
+  );
+  const uploadData = (await uploadRes.json()) as { upload: { token: string } };
+  await redmineFetch(`/issues/${params.issueId}.json`, params.apiKey, {
+    method: "PUT",
+    body: JSON.stringify({
+      issue: {
+        uploads: [
+          {
+            token: uploadData.upload.token,
+            filename: params.filename,
+            ...(params.description ? { description: params.description } : {}),
+          },
+        ],
+        ...(params.notes ? { notes: params.notes } : {}),
+      },
+    }),
   });
 }
