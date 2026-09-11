@@ -78,6 +78,36 @@ function toCompactIssue(raw: RedmineIssue): CompactIssue {
   };
 }
 
+export interface SummaryIssue {
+  id: number;
+  subject: string;
+  description: string;
+  tracker: string;
+  status: string;
+  priority: string;
+  assignedTo?: string;
+  updatedOn: string;
+}
+
+const SUMMARY_DESCRIPTION_MAX_CHARS = 300;
+
+export function toSummaryIssue(detailed: DetailedIssue): SummaryIssue {
+  const description =
+    detailed.description.length > SUMMARY_DESCRIPTION_MAX_CHARS
+      ? `${detailed.description.slice(0, SUMMARY_DESCRIPTION_MAX_CHARS)}... (truncado, peça texto completo se precisar)`
+      : detailed.description;
+  return {
+    id: detailed.id,
+    subject: detailed.subject,
+    description,
+    tracker: detailed.tracker,
+    status: detailed.status,
+    priority: detailed.priority,
+    ...(detailed.assignedTo ? { assignedTo: detailed.assignedTo } : {}),
+    updatedOn: detailed.updatedOn,
+  };
+}
+
 function toDetailedIssue(raw: RedmineIssue): DetailedIssue {
   return {
     id: raw.id,

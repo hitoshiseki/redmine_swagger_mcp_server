@@ -17,6 +17,7 @@ const {
   updateIssueStatus,
   createIssue,
   updateIssue,
+  toSummaryIssue,
 } = await import("./redmine.js");
 const { searchApiEndpoints, getApiEndpoint } = await import("./swagger.js");
 
@@ -63,6 +64,43 @@ async function askCrossCheckApi(server: McpServer): Promise<boolean | null> {
     });
     if (result.action === "accept" && result.content) {
       return Boolean(result.content.cruzar);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function askGetIssuesOptions(server: McpServer): Promise<{ crossCheck: boolean; resumido: boolean } | null> {
+  try {
+    const result = await server.server.elicitInput({
+      mode: "form",
+      message: "Como você quer receber a(s) tarefa(s)?",
+      requestedSchema: {
+        type: "object",
+        properties: {
+          nivel: {
+            type: "string",
+            title: "Nível de detalhe",
+            description: "Completo traz descrição integral e histórico. Resumido trunca a descrição e omite histórico.",
+            enum: ["completo", "resumido"],
+            default: "completo",
+          },
+          cruzar: {
+            type: "boolean",
+            title: "Cruzar com a API?",
+            description: "Se sim, o assistente vai buscar o endpoint correspondente na API pra comparar.",
+            default: false,
+          },
+        },
+        required: ["nivel", "cruzar"],
+      },
+    });
+    if (result.action === "accept" && result.content) {
+      return {
+        crossCheck: Boolean(result.content.cruzar),
+        resumido: result.content.nivel === "resumido",
+      };
     }
     return null;
   } catch {
@@ -132,8 +170,9 @@ function buildServer(apiKey: string): McpServer {
     async ({ issueIds }) => {
       try {
         const issues = await getIssues(issueIds, apiKey);
-        const crossCheck = await askCrossCheckApi(server);
-        return textResultRedmine(issues, crossCheck);
+        const options = await askGetIssuesOptions(server);
+        const output = options?.resumido ? issues.map(toSummaryIssue) : issues;
+        return textResultRedmine(output, options?.crossCheck ?? null);
       } catch (err) {
         return errorResult(err);
       }
