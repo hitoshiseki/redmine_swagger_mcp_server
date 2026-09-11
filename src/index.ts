@@ -39,83 +39,6 @@ function textResult(data: unknown) {
   };
 }
 
-const CROSS_CHECK_ACCEPTED_HINT =
-  "\n\nUsuário pediu pra cruzar com a API — use api_search_endpoints/api_get_endpoint pra comparar com os dados acima e apontar inconsistências.";
-const CROSS_CHECK_FALLBACK_HINT =
-  "\n\nDica: quer cruzar essa informação com a API (Swagger)? Use api_search_endpoints ou api_get_endpoint.";
-
-async function askCrossCheckApi(server: McpServer): Promise<boolean | null> {
-  try {
-    const result = await server.server.elicitInput({
-      mode: "form",
-      message: "Deseja cruzar essa informação do Redmine com a API (Swagger) para checar inconsistências/divergências?",
-      requestedSchema: {
-        type: "object",
-        properties: {
-          cruzar: {
-            type: "boolean",
-            title: "Cruzar com a API?",
-            description: "Se sim, o assistente vai buscar o endpoint correspondente na API pra comparar.",
-            default: false,
-          },
-        },
-        required: ["cruzar"],
-      },
-    });
-    if (result.action === "accept" && result.content) {
-      return Boolean(result.content.cruzar);
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-async function askGetIssuesOptions(server: McpServer): Promise<{ crossCheck: boolean; resumido: boolean } | null> {
-  try {
-    const result = await server.server.elicitInput({
-      mode: "form",
-      message: "Como você quer receber a(s) tarefa(s)?",
-      requestedSchema: {
-        type: "object",
-        properties: {
-          nivel: {
-            type: "string",
-            title: "Nível de detalhe",
-            description: "Completo traz descrição integral e histórico. Resumido trunca a descrição e omite histórico.",
-            enum: ["completo", "resumido"],
-            default: "completo",
-          },
-          cruzar: {
-            type: "boolean",
-            title: "Cruzar com a API?",
-            description: "Se sim, o assistente vai buscar o endpoint correspondente na API pra comparar.",
-            default: false,
-          },
-        },
-        required: ["nivel", "cruzar"],
-      },
-    });
-    if (result.action === "accept" && result.content) {
-      return {
-        crossCheck: Boolean(result.content.cruzar),
-        resumido: result.content.nivel === "resumido",
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function textResultRedmine(data: unknown, crossCheck: boolean | null) {
-  const base = JSON.stringify(data);
-  const hint = crossCheck === true ? CROSS_CHECK_ACCEPTED_HINT : CROSS_CHECK_FALLBACK_HINT;
-  return {
-    content: [{ type: "text" as const, text: base + hint }],
-  };
-}
-
 function errorResult(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
   return {
@@ -149,8 +72,7 @@ function buildServer(apiKey: string): McpServer {
     async ({ status, tracker, projectId, limit }) => {
       try {
         const issues = await listIssues({ statusName: status, trackerName: tracker, projectId, limit, apiKey });
-        const crossCheck = await askCrossCheckApi(server);
-        return textResultRedmine(issues, crossCheck);
+        return textResult(issues);
       } catch (err) {
         return errorResult(err);
       }
@@ -162,17 +84,22 @@ function buildServer(apiKey: string): McpServer {
     {
       title: "Buscar tarefa(s) do Redmine por id",
       description:
-        "Busca detalhes completos (descrição, histórico) de uma ou várias tarefas do Redmine pelos ids, numa única chamada.",
+        "Busca detalhes de uma ou várias tarefas do Redmine pelos ids, numa única chamada. Por padrão traz descrição completa e histórico; use resumido: true pra uma versão mais enxuta (descrição truncada, sem histórico). IMPORTANTE: se a intenção for cruzar a tarefa com a API (swagger) pra checar inconsistências, NÃO use resumido — a descrição pode ser truncada e esconder detalhes relevantes pra comparação. Use resumido só quando não for cruzar com a API.",
       inputSchema: {
         issueIds: z.array(z.number().int().positive()).min(1).describe("Lista de ids das tarefas"),
+        resumido: z
+          .boolean()
+          .optional()
+          .describe(
+            "Se true, retorna versão resumida (descrição truncada, sem histórico). Não usar se for cruzar a tarefa com a API.",
+          ),
       },
     },
-    async ({ issueIds }) => {
+    async ({ issueIds, resumido }) => {
       try {
         const issues = await getIssues(issueIds, apiKey);
-        const options = await askGetIssuesOptions(server);
-        const output = options?.resumido ? issues.map(toSummaryIssue) : issues;
-        return textResultRedmine(output, options?.crossCheck ?? null);
+        const output = resumido ? issues.map(toSummaryIssue) : issues;
+        return textResult(output);
       } catch (err) {
         return errorResult(err);
       }
@@ -192,8 +119,7 @@ function buildServer(apiKey: string): McpServer {
     async ({ issueId, status }) => {
       try {
         await updateIssueStatus(issueId, status, apiKey);
-        const crossCheck = await askCrossCheckApi(server);
-        return textResultRedmine({ issueId, status, updated: true }, crossCheck);
+        return textResult({ issueId, status, updated: true });
       } catch (err) {
         return errorResult(err);
       }
@@ -283,8 +209,7 @@ function buildServer(apiKey: string): McpServer {
           assignedToId,
           apiKey,
         });
-        const crossCheck = await askCrossCheckApi(server);
-        return textResultRedmine(issue, crossCheck);
+        return textResult(issue);
       } catch (err) {
         return errorResult(err);
       }
@@ -322,8 +247,7 @@ function buildServer(apiKey: string): McpServer {
           assignedToId,
           apiKey,
         });
-        const crossCheck = await askCrossCheckApi(server);
-        return textResultRedmine({ issueId, updated: true }, crossCheck);
+        return textResult({ issueId, updated: true });
       } catch (err) {
         return errorResult(err);
       }
