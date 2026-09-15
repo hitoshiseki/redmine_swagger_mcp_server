@@ -5,6 +5,8 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 config({ path: join(dirname(fileURLToPath(import.meta.url)), "..", ".env"), quiet: true });
 
@@ -479,15 +481,16 @@ async function mainStdio() {
 async function mainHttp() {
   const port = parseInt(process.env.PORT ?? "3000");
   const sessions = new Map<string, SSEServerTransport>();
+  const streamableSessions = new Map<string, StreamableHTTPServerTransport>();
 
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     if (req.url === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", sessions: sessions.size }));
+      res.end(JSON.stringify({ status: "ok", sessions: sessions.size + streamableSessions.size }));
       return;
     }
 
-    if (req.method === "GET" && req.url === "/sse") {
+    if (req.method === "GET" && req.url === "/sse" && !req.headers["mcp-session-id"]) {
       const apiKey = req.headers["x-redmine-api-key"] as string | undefined;
       if (!apiKey) {
         res.writeHead(401, { "Content-Type": "application/json" });
@@ -511,6 +514,44 @@ async function mainHttp() {
         return;
       }
       await transport.handlePostMessage(req, res);
+      return;
+    }
+
+    // Streamable HTTP (protocolo novo, usado por ex. Codex) reaproveitando o mesmo endpoint /sse.
+    if (req.url === "/sse" && (req.method === "POST" || req.method === "GET" || req.method === "DELETE")) {
+      const sessionIdHeader = req.headers["mcp-session-id"] as string | undefined;
+      let transport = sessionIdHeader ? streamableSessions.get(sessionIdHeader) : undefined;
+
+      if (!transport) {
+        if (req.method !== "POST") {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "Sessão inválida ou ausente" }, id: null }));
+          return;
+        }
+
+        const apiKey = req.headers["x-redmine-api-key"] as string | undefined;
+        if (!apiKey) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Header X-Redmine-Api-Key obrigatório" }));
+          return;
+        }
+
+        transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (sessionId) => {
+            streamableSessions.set(sessionId, transport as StreamableHTTPServerTransport);
+          },
+        });
+        transport.onclose = () => {
+          const sid = transport?.sessionId;
+          if (sid) streamableSessions.delete(sid);
+        };
+
+        const server = buildServer(apiKey);
+        await server.connect(transport);
+      }
+
+      await transport.handleRequest(req, res);
       return;
     }
 
