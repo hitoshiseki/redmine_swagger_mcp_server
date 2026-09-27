@@ -1,7 +1,20 @@
-const SWAGGER_URL = process.env.SWAGGER_URL ?? "";
+export type Ambiente = "producao" | "desenvolvimento";
 
-if (!SWAGGER_URL) {
+const SWAGGER_URLS: Record<Ambiente, string> = {
+  producao: process.env.SWAGGER_URL ?? "",
+  desenvolvimento: process.env.SWAGGER_URL_DEV ?? "",
+};
+
+if (!SWAGGER_URLS.producao) {
   throw new Error("SWAGGER_URL precisa estar definido no .env do servidor MCP");
+}
+
+function resolveSwaggerUrl(ambiente: Ambiente): string {
+  const url = SWAGGER_URLS[ambiente];
+  if (!url) {
+    throw new Error(`SWAGGER_URL_DEV precisa estar definido no .env do servidor MCP para usar o ambiente "${ambiente}"`);
+  }
+  return url;
 }
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "options", "head"] as const;
@@ -14,10 +27,11 @@ interface OpenApiDoc {
   components?: { schemas?: JsonObject };
 }
 
-async function fetchSpec(): Promise<OpenApiDoc> {
-  const res = await fetch(SWAGGER_URL);
+async function fetchSpec(ambiente: Ambiente): Promise<OpenApiDoc> {
+  const url = resolveSwaggerUrl(ambiente);
+  const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`GET ${SWAGGER_URL} -> ${res.status} ${res.statusText}`);
+    throw new Error(`GET ${url} -> ${res.status} ${res.statusText}`);
   }
   return (await res.json()) as OpenApiDoc;
 }
@@ -30,8 +44,8 @@ export interface EndpointSummary {
   tags?: string[];
 }
 
-export async function searchApiEndpoints(query: string): Promise<EndpointSummary[]> {
-  const spec = await fetchSpec();
+export async function searchApiEndpoints(query: string, ambiente: Ambiente = "producao"): Promise<EndpointSummary[]> {
+  const spec = await fetchSpec(ambiente);
   const q = query.toLowerCase();
   const results: EndpointSummary[] = [];
 
@@ -92,8 +106,8 @@ function resolveRefs(node: unknown, doc: OpenApiDoc, chain: Set<string>): unknow
   return node;
 }
 
-export async function getApiEndpoint(path: string, method: string): Promise<JsonObject> {
-  const spec = await fetchSpec();
+export async function getApiEndpoint(path: string, method: string, ambiente: Ambiente = "producao"): Promise<JsonObject> {
+  const spec = await fetchSpec(ambiente);
   const methodLower = method.toLowerCase();
   const pathItem = spec.paths?.[path];
   if (!pathItem) {
