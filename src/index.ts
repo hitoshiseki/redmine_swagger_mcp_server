@@ -32,9 +32,9 @@ const { searchApiEndpoints, getApiEndpoint } = await import("./swagger.js");
 
 const AMBIENTE_SCHEMA = z
   .enum(["producao", "desenvolvimento"])
-  .default("producao")
+  .default("desenvolvimento")
   .describe(
-    "Ambiente da API a consultar: 'producao' (padrão) ou 'desenvolvimento'. Use 'desenvolvimento' quando o usuário mencionar ambiente de dev/desenvolvimento explicitamente.",
+    "Ambiente da API a consultar: 'desenvolvimento' (padrão) ou 'producao'. Use 'producao' quando o usuário mencionar ambiente de produção explicitamente.",
   );
 
 const STATUS_NAMES = [
@@ -438,7 +438,7 @@ function buildServer(apiKey: string): McpServer {
     {
       title: "Buscar endpoints na API do NexusGOV (swagger)",
       description:
-        "Busca (por texto livre) endpoints no OpenAPI spec atual do backend NexusGOV, batendo contra path, summary, operationId e tags. Retorna uma lista compacta — use api_get_endpoint para pegar o contrato completo de um endpoint específico. Por padrão consulta o ambiente de produção; use ambiente: 'desenvolvimento' se o usuário mencionar ambiente de dev/desenvolvimento.",
+        "Busca (por texto livre) endpoints no OpenAPI spec atual do backend NexusGOV, batendo contra path, summary, operationId e tags. Retorna uma lista compacta — use api_get_endpoint para pegar o contrato completo de um endpoint específico. Por padrão consulta o ambiente de desenvolvimento; use ambiente: 'producao' se o usuário mencionar ambiente de produção.",
       inputSchema: {
         query: z.string().min(1).describe("Termo de busca, ex: 'processo-sancionador', 'contrato', 'ocorrencia'"),
         ambiente: AMBIENTE_SCHEMA,
@@ -459,7 +459,7 @@ function buildServer(apiKey: string): McpServer {
     {
       title: "Detalhe de um endpoint da API do NexusGOV (swagger)",
       description:
-        "Retorna o contrato completo (parameters, requestBody, responses, schemas resolvidos) de um endpoint específico da API do backend NexusGOV. Use api_search_endpoints antes para achar o path/method certo. Por padrão consulta o ambiente de produção; use ambiente: 'desenvolvimento' se o usuário mencionar ambiente de dev/desenvolvimento.",
+        "Retorna o contrato completo (parameters, requestBody, responses, schemas resolvidos) de um endpoint específico da API do backend NexusGOV. Use api_search_endpoints antes para achar o path/method certo. Por padrão consulta o ambiente de desenvolvimento; use ambiente: 'producao' se o usuário mencionar ambiente de produção.",
       inputSchema: {
         path: z.string().min(1).describe("Path exato do endpoint, ex: /api/v1/contratos/{id}"),
         method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).describe("Método HTTP"),

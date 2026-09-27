@@ -44,7 +44,7 @@ export interface EndpointSummary {
   tags?: string[];
 }
 
-export async function searchApiEndpoints(query: string, ambiente: Ambiente = "producao"): Promise<EndpointSummary[]> {
+export async function searchApiEndpoints(query: string, ambiente: Ambiente = "desenvolvimento"): Promise<EndpointSummary[]> {
   const spec = await fetchSpec(ambiente);
   const q = query.toLowerCase();
   const results: EndpointSummary[] = [];
@@ -106,7 +106,7 @@ function resolveRefs(node: unknown, doc: OpenApiDoc, chain: Set<string>): unknow
   return node;
 }
 
-export async function getApiEndpoint(path: string, method: string, ambiente: Ambiente = "producao"): Promise<JsonObject> {
+export async function getApiEndpoint(path: string, method: string, ambiente: Ambiente = "desenvolvimento"): Promise<JsonObject> {
   const spec = await fetchSpec(ambiente);
   const methodLower = method.toLowerCase();
   const pathItem = spec.paths?.[path];
