@@ -1,7 +1,7 @@
 services:
   nexusgov-redmine-mcp:
-    build: .
-    image: nexusgov-redmine-mcp:latest
+    image: ghcr.io/hitoshiseki/redmine_swagger_mcp_server:latest
+    pull_policy: always
     restart: unless-stopped
     ports:
       - "3001:3000"
