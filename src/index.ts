@@ -544,6 +544,12 @@ async function mainHttp() {
       let transport = sessionIdHeader ? streamableSessions.get(sessionIdHeader) : undefined;
 
       if (!transport) {
+        // Sessão expirada (ex: após redeploy): 404 faz o cliente reinicializar sozinho, conforme o spec MCP.
+        if (sessionIdHeader) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Sessão expirada, reconecte" }, id: null }));
+          return;
+        }
         if (req.method !== "POST") {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "Sessão inválida ou ausente" }, id: null }));

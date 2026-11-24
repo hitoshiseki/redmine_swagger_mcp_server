@@ -179,6 +179,15 @@
   <strong>Não precisa instalar nada.</strong> O servidor já roda centralizado no endereço abaixo. Você só precisa rodar um comando (ou colar um trecho de configuração), uma única vez, para conectar sua conta.
 </div>
 
+<div class="box">
+  <strong>Novidades desta versão</strong>
+  <br>• Funciona com <strong>todos os projetos do Redmine</strong> que você tem acesso, não só o NexusGOV.
+  <br>• Se você não disser o projeto, o assistente pergunta e mostra a lista. Depois usa o mesmo projeto pelo resto da conversa.
+  <br>• Mudança de status respeita o fluxo do Redmine: se não for permitida, o assistente avisa para quais status a tarefa pode ir.
+  <br>• Status como "Paralisada" e "Teste de Qualidade" voltaram a funcionar.
+  <br>Já estava configurado? Não precisa refazer nada, só <strong>feche e abra o Claude Code ou o Codex</strong>.
+</div>
+
 <h2>O que você vai precisar</h2>
 <ul>
   <li>O Claude Code <strong>ou</strong> o Codex CLI já instalado no seu computador (se não tiver, peça ajuda ao time técnico)</li>
@@ -390,6 +399,19 @@ http_headers = { "X-Redmine-Api-Key" = "SUA_KEY_PESSOAL" }</pre>
 
 <h3>Preciso repetir esse processo toda vez que abrir o assistente?</h3>
 <p>Não. A conexão é feita uma única vez por computador. Depois disso, ele já sabe se conectar ao Redmine automaticamente sempre que você abrir uma nova conversa.</p>
+
+<h3>O MCP aparece como "Failed", "timed out" ou parou de responder. E agora?</h3>
+<p>Quase sempre é porque o assistente foi aberto <strong>antes de conectar a VPN</strong>, ou a VPN caiu no meio do uso. Ele tenta conectar só ao abrir e, se não conseguir, desiste. Para resolver:</p>
+<ul>
+  <li>Confira se a VPN está conectada.</li>
+  <li><strong>Claude Code:</strong> não precisa fechar. Digite <code class="inline">/mcp</code>, selecione <code class="inline">nexusgov-redmine</code> e escolha <strong>Reconnect</strong>.</li>
+  <li><strong>Codex:</strong> feche e abra o Codex de novo.</li>
+</ul>
+<div class="box tip">
+  <strong>Para evitar:</strong> conecte a VPN <strong>antes</strong> de abrir o Claude Code ou o Codex. Se a sua VPN costuma demorar, dá para aumentar o tempo de espera:
+  <br>• <strong>Codex:</strong> adicione a linha <code class="inline">startup_timeout_sec = 60</code> dentro do bloco <code class="inline">[mcp_servers.nexusgov-redmine]</code> do <code class="inline">config.toml</code>.
+  <br>• <strong>Claude Code:</strong> abra com a variável <code class="inline">MCP_TIMEOUT=60000</code> (ex.: no Mac, <code class="inline">MCP_TIMEOUT=60000 claude</code>).
+</div>
 
 <h3>Minha chave de API é segura?</h3>
 <p>Sim, ela fica salva só no seu computador e é usada apenas para identificar você no Redmine. Nunca compartilhe essa chave com outras pessoas.</p>
