@@ -59,8 +59,8 @@ Passe `resumido: true` pra receber uma versão mais enxuta (descrição truncada
    | Variável | Valor |
    |----------|-------|
    | `REDMINE_URL` | URL do Redmine |
-   | `REDMINE_DEFAULT_PROJECT_ID` | `15` |
-   | `SWAGGER_URL` | URL do swagger |
+   | `SWAGGER_URL` | Swagger de produção, ex: `http://10.30.0.2:8080/v3/api-docs` |
+   | `SWAGGER_URL_DEV` | Swagger de desenvolvimento, ex: `http://10.20.0.2:8080/v3/api-docs` |
 
    > `REDMINE_API_KEY` **não vai no Portainer** — cada dev envia a própria key via header.
 

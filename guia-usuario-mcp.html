@@ -173,7 +173,7 @@
 </div>
 
 <h2>O que é isso?</h2>
-<p>Este é um "conector" (chamado de <strong>MCP</strong>) que liga assistentes de IA como o <strong>Claude Code</strong> e o <strong>Codex CLI</strong> diretamente a dois sistemas da NexusGOV: o <strong>Redmine</strong> (tarefas) e a <strong>documentação da API</strong> do backend (Swagger). Depois de configurado uma única vez, você pode simplesmente <strong>conversar</strong> pedindo coisas como "quais são minhas tarefas em aberto?", "muda a tarefa 123 para em andamento" ou "procura no swagger o endpoint de login", e o assistente faz isso por você, sem precisar abrir o Redmine ou o Swagger no navegador.</p>
+<p>Este é um "conector" (chamado de <strong>MCP</strong>) que liga assistentes de IA como o <strong>Claude Code</strong> e o <strong>Codex CLI</strong> diretamente a dois sistemas: o <strong>Redmine</strong> (tarefas de todos os projetos que você tem acesso) e a <strong>documentação da API</strong> do backend NexusGOV (Swagger). Depois de configurado uma única vez, você pode simplesmente <strong>conversar</strong> pedindo coisas como "quais são minhas tarefas em aberto?", "muda a tarefa 123 para em andamento" ou "procura no swagger o endpoint de login", e o assistente faz isso por você, sem precisar abrir o Redmine ou o Swagger no navegador.</p>
 
 <div class="box tip">
   <strong>Não precisa instalar nada.</strong> O servidor já roda centralizado no endereço abaixo. Você só precisa rodar um comando (ou colar um trecho de configuração), uma única vez, para conectar sua conta.
@@ -183,11 +183,18 @@
 <ul>
   <li>O Claude Code <strong>ou</strong> o Codex CLI já instalado no seu computador (se não tiver, peça ajuda ao time técnico)</li>
   <li>Acesso ao Redmine da NexusGOV com seu usuário e senha</li>
+  <li>Estar conectado à rede interna (ou VPN) que acessa o servidor de desenvolvimento</li>
 </ul>
 
 <div class="box">
-  <strong>Endereço do servidor:</strong> <code class="inline">http://45.79.207.184:3001</code>
+  <strong>Endereço do servidor:</strong> <code class="inline">http://10.20.0.2:3001</code>
   <br>Esse endereço já vem pronto nos comandos deste guia — não precisa trocar nada.
+</div>
+
+<div class="box warn">
+  <strong>Já usava o MCP antes?</strong> O servidor mudou de endereço (o antigo era <code class="inline">45.79.207.184</code>). Refaça o Passo 2:
+  <br>• <strong>Claude Code:</strong> rode primeiro <code class="inline">claude mcp remove nexusgov-redmine</code> e depois o comando do Passo 2.
+  <br>• <strong>Codex:</strong> substitua o bloco <code class="inline">[mcp_servers.nexusgov-redmine]</code> inteiro pelo novo. Atenção: a linha agora começa com <code class="inline">http_headers</code>, e não <code class="inline">headers</code>.
 </div>
 
 <h2>Passo 1 — Pegue sua chave de acesso pessoal no Redmine</h2>
@@ -229,7 +236,7 @@
   <div class="num">2</div>
   <div class="content">
     <strong>Cole o comando abaixo e aperte Enter</strong>
-    <pre>claude mcp add --transport sse --scope user nexusgov-redmine http://45.79.207.184:3001/sse --header "X-Redmine-Api-Key: SUA_KEY_PESSOAL"</pre>
+    <pre>claude mcp add --transport sse --scope user nexusgov-redmine http://10.20.0.2:3001/sse --header "X-Redmine-Api-Key: SUA_KEY_PESSOAL"</pre>
   </div>
 </div>
 <div class="step">
@@ -252,7 +259,7 @@
   <div class="num">2</div>
   <div class="content">
     <strong>Cole o comando abaixo e aperte Enter</strong> (é o mesmo comando do Mac)
-    <pre>claude mcp add --transport sse --scope user nexusgov-redmine http://45.79.207.184:3001/sse --header "X-Redmine-Api-Key: SUA_KEY_PESSOAL"</pre>
+    <pre>claude mcp add --transport sse --scope user nexusgov-redmine http://10.20.0.2:3001/sse --header "X-Redmine-Api-Key: SUA_KEY_PESSOAL"</pre>
   </div>
 </div>
 <div class="step">
@@ -297,8 +304,8 @@
   <div class="content">
     <strong>Abra o arquivo em um editor de texto</strong> (Bloco de Notas no Windows, TextEdit no Mac) e cole no final:
     <pre>[mcp_servers.nexusgov-redmine]
-url = "http://45.79.207.184:3001/sse"
-headers = { "X-Redmine-Api-Key" = "SUA_KEY_PESSOAL" }</pre>
+url = "http://10.20.0.2:3001/sse"
+http_headers = { "X-Redmine-Api-Key" = "SUA_KEY_PESSOAL" }</pre>
   </div>
 </div>
 <div class="step">
@@ -310,7 +317,10 @@ headers = { "X-Redmine-Api-Key" = "SUA_KEY_PESSOAL" }</pre>
 </div>
 
 <div class="box warn">
-  <strong>Se der erro de conexão (Claude ou Codex):</strong> confira se colou a chave sem espaços extras e se o endereço está exatamente <code class="inline">http://45.79.207.184:3001/sse</code>. Se continuar com problema, chame o time técnico.
+  <strong>Se der erro de conexão (Claude ou Codex):</strong> confira se colou a chave sem espaços extras e se o endereço está exatamente <code class="inline">http://10.20.0.2:3001/sse</code>. No Codex, confira também se a linha começa com <code class="inline">http_headers</code>.
+  <br><br><strong>Se aparecer "conexão recusada" ou "tempo esgotado":</strong> seu computador provavelmente não está alcançando o servidor. Confira se está na rede interna/VPN e teste abrindo no navegador:
+  <pre>http://10.20.0.2:3001/health</pre>
+  Se aparecer <code class="inline">{"status":"ok",...}</code>, a rede está ok. Se não abrir, chame o time técnico.
 </div>
 
 <div class="section-break"></div>
@@ -318,16 +328,27 @@ headers = { "X-Redmine-Api-Key" = "SUA_KEY_PESSOAL" }</pre>
 <h2>O que você pode pedir</h2>
 <p>Depois de conectado, é só escrever em português normal, tanto no Claude Code quanto no Codex. Alguns exemplos:</p>
 
+<h3>Escolher o projeto</h3>
+<p>O MCP funciona com <strong>todos os projetos do Redmine</strong> que você tem acesso, não só o NexusGOV. Para listar ou criar tarefas, o assistente precisa saber o projeto:</p>
+<div class="example">"Quais projetos eu tenho no Redmine?"</div>
+<div class="example">"Liste as tarefas novas do projeto NexusGOV"</div>
+<div class="box tip">
+  Se você não disser o projeto, o assistente <strong>pergunta</strong> e mostra a lista para você escolher. Depois disso, ele usa o mesmo projeto pelo resto da conversa, até você pedir para trocar ("agora no projeto Geral"). Pode chamar o projeto pelo nome, como aparece no Redmine — não precisa saber o número.
+</div>
+
 <h3>Ver tarefas</h3>
-<div class="example">"Liste minhas tarefas em aberto no projeto X"</div>
+<div class="example">"Liste minhas tarefas em aberto no projeto NexusGOV"</div>
 <div class="example">"Mostra os detalhes da tarefa 4521"</div>
 
 <h3>Mudar status de uma tarefa</h3>
 <div class="example">"Muda a tarefa 4521 para 'Em andamento'"</div>
 <div class="example">"Quais status existem no Redmine?"</div>
+<div class="box tip">
+  Cada tarefa só pode ir para os status que o fluxo do Redmine permite (por exemplo, uma tarefa "Nova" pode não poder ir direto para "Fechada"). Se o status pedido não for permitido, o assistente avisa e mostra <strong>para quais status a tarefa pode ir</strong>.
+</div>
 
 <h3>Criar uma tarefa nova</h3>
-<div class="example">"Cria uma tarefa nova no projeto X pra corrigir o botão de login"</div>
+<div class="example">"Cria uma tarefa nova no projeto NexusGOV pra corrigir o botão de login"</div>
 <div class="box tip">
   Antes de criar, o assistente sempre vai <strong>mostrar o texto final</strong> da tarefa (assunto, descrição, tipo, prioridade, responsável) e pedir sua confirmação. Nada é criado sem você aprovar.
 </div>
@@ -341,13 +362,17 @@ headers = { "X-Redmine-Api-Key" = "SUA_KEY_PESSOAL" }</pre>
 <h3>Consultar a documentação do sistema (Swagger)</h3>
 <div class="example">"Procura no swagger algum endpoint de login"</div>
 <div class="example">"Mostra o contrato completo do endpoint de cadastro de usuário"</div>
+<div class="box tip">
+  As consultas ao Swagger usam a API do <strong>ambiente de desenvolvimento</strong>. O ambiente de produção ainda não está acessível pelo MCP.
+</div>
 
 <h2>Tabela de funções disponíveis</h2>
 <table>
   <tr><th>O que faz</th><th>Exemplo de pedido</th></tr>
-  <tr><td>Listar tarefas de um projeto por status</td><td>"Liste as tarefas pendentes do projeto Y"</td></tr>
+  <tr><td>Listar os projetos do Redmine</td><td>"Quais projetos eu tenho?"</td></tr>
+  <tr><td>Listar tarefas de um projeto por status</td><td>"Liste as tarefas pendentes do projeto NexusGOV"</td></tr>
   <tr><td>Ver detalhes de uma ou mais tarefas</td><td>"Mostra a tarefa 100 e a 101"</td></tr>
-  <tr><td>Criar uma tarefa nova (pede confirmação antes)</td><td>"Cria uma tarefa pra revisar o contrato Z"</td></tr>
+  <tr><td>Criar uma tarefa nova (pede confirmação antes)</td><td>"Cria uma tarefa no projeto Geral pra revisar o contrato Z"</td></tr>
   <tr><td>Editar assunto, descrição, tipo, prioridade ou responsável (pede confirmação antes)</td><td>"Muda o responsável da tarefa 100 pro João"</td></tr>
   <tr><td>Mudar o status de uma tarefa</td><td>"Fecha a tarefa 100"</td></tr>
   <tr><td>Listar status disponíveis no Redmine</td><td>"Quais status existem?"</td></tr>

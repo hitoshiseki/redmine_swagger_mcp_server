@@ -1,5 +1,4 @@
 const REDMINE_URL = (process.env.REDMINE_URL ?? "").replace(/\/$/, "");
-const REDMINE_DEFAULT_PROJECT_ID = process.env.REDMINE_DEFAULT_PROJECT_ID ?? "";
 
 if (!REDMINE_URL) {
   throw new Error("REDMINE_URL precisa estar definido no .env do servidor MCP");
@@ -191,53 +190,122 @@ export async function getIssuePriorities(apiKey: string): Promise<RedminePriorit
   return priorityCache;
 }
 
+// Alguns nomes no Redmine têm espaço sobrando no fim (ex: "Paralisada ").
+function sameName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function nameList(items: { name: string }[]): string {
+  return items.map((i) => i.name.trim()).join(", ");
+}
+
 async function resolveTrackerId(trackerName: string, apiKey: string): Promise<number> {
   const trackers = await getIssueTrackers(apiKey);
-  const match = trackers.find(
-    (t) => t.name.toLowerCase() === trackerName.toLowerCase(),
-  );
+  const match = trackers.find((t) => sameName(t.name, trackerName));
   if (!match) {
-    const names = trackers.map((t) => t.name).join(", ");
-    throw new Error(`Tracker "${trackerName}" não encontrado no Redmine. Trackers disponíveis: ${names}`);
+    throw new Error(`Tracker "${trackerName}" não encontrado no Redmine. Trackers disponíveis: ${nameList(trackers)}`);
   }
   return match.id;
 }
 
 async function resolveStatusId(statusName: string, apiKey: string): Promise<number> {
   const statuses = await getIssueStatuses(apiKey);
-  const match = statuses.find(
-    (s) => s.name.toLowerCase() === statusName.toLowerCase(),
-  );
+  const match = statuses.find((s) => sameName(s.name, statusName));
   if (!match) {
-    const names = statuses.map((s) => s.name).join(", ");
-    throw new Error(`Status "${statusName}" não encontrado no Redmine. Status disponíveis: ${names}`);
+    throw new Error(`Status "${statusName}" não encontrado no Redmine. Status disponíveis: ${nameList(statuses)}`);
   }
   return match.id;
 }
 
+// Retorna true se deu pra validar antes (Redmine >= 5.0 expõe allowed_statuses).
+async function checkStatusTransition(issueId: number, statusId: number, statusName: string, apiKey: string): Promise<boolean> {
+  const res = await redmineFetch(`/issues/${issueId}.json?include=allowed_statuses`, apiKey);
+  const data = (await res.json()) as { issue: RedmineIssue & { allowed_statuses?: RedmineStatus[] } };
+  const allowed = data.issue.allowed_statuses;
+  if (!allowed) return false;
+  if (data.issue.status.id === statusId || allowed.some((s) => s.id === statusId)) return true;
+  throw new Error(
+    `A tarefa ${issueId} está em "${data.issue.status.name.trim()}" e não pode ir para "${statusName.trim()}" (workflow do Redmine). Status permitidos a partir daqui: ${nameList(allowed) || "nenhum"}`,
+  );
+}
+
+async function verifyStatusApplied(issueId: number, statusId: number, statusName: string, apiKey: string): Promise<void> {
+  const res = await redmineFetch(`/issues/${issueId}.json`, apiKey);
+  const data = (await res.json()) as { issue: RedmineIssue };
+  if (data.issue.status.id !== statusId) {
+    throw new Error(
+      `O Redmine não aplicou o status "${statusName.trim()}" na tarefa ${issueId}, que continua em "${data.issue.status.name.trim()}". Provavelmente o workflow não permite essa transição para o seu usuário. Os demais campos enviados podem ter sido salvos.`,
+    );
+  }
+}
+
 async function resolvePriorityId(priorityName: string, apiKey: string): Promise<number> {
   const priorities = await getIssuePriorities(apiKey);
-  const match = priorities.find(
-    (p) => p.name.toLowerCase() === priorityName.toLowerCase(),
-  );
+  const match = priorities.find((p) => sameName(p.name, priorityName));
   if (!match) {
-    const names = priorities.map((p) => p.name).join(", ");
+    const names = nameList(priorities);
     throw new Error(`Prioridade "${priorityName}" não encontrada no Redmine. Prioridades disponíveis: ${names}`);
   }
   return match.id;
 }
 
+export interface ProjectSummary {
+  id: number;
+  name: string;
+  identifier: string;
+  parent?: string;
+}
+
+export async function listProjects(apiKey: string): Promise<ProjectSummary[]> {
+  const projects: ProjectSummary[] = [];
+  const pageSize = 100;
+  for (let offset = 0; ; offset += pageSize) {
+    const res = await redmineFetch(`/projects.json?limit=${pageSize}&offset=${offset}`, apiKey);
+    const data = (await res.json()) as {
+      projects: { id: number; name: string; identifier: string; parent?: { name: string } }[];
+      total_count: number;
+    };
+    for (const p of data.projects) {
+      projects.push({ id: p.id, name: p.name, identifier: p.identifier, ...(p.parent ? { parent: p.parent.name } : {}) });
+    }
+    if (offset + pageSize >= data.total_count) break;
+  }
+  return projects;
+}
+
+async function resolveProjectId(projectRef: string, apiKey: string): Promise<number> {
+  const ref = projectRef.trim();
+  if (!ref) {
+    throw new Error(
+      "Projeto não informado. Chame redmine_list_projects e peça pro usuário escolher o projeto.",
+    );
+  }
+  if (/^\d+$/.test(ref)) return Number(ref);
+
+  const projects = await listProjects(apiKey);
+  const lower = ref.toLowerCase();
+  const exact = projects.find((p) => p.identifier.toLowerCase() === lower || p.name.toLowerCase() === lower);
+  if (exact) return exact.id;
+
+  const partial = projects.filter((p) => p.name.toLowerCase().includes(lower) || p.identifier.toLowerCase().includes(lower));
+  if (partial.length === 1) return partial[0].id;
+
+  const candidates = (partial.length > 0 ? partial : projects).map((p) => `${p.name} (${p.identifier})`).join(", ");
+  throw new Error(
+    partial.length > 1
+      ? `Mais de um projeto corresponde a "${ref}": ${candidates}. Pergunte ao usuário qual deles.`
+      : `Projeto "${ref}" não encontrado. Projetos disponíveis: ${candidates}`,
+  );
+}
+
 export async function listIssues(params: {
-  projectId?: string;
+  projectId: string;
   statusName?: string;
   trackerName?: string;
   limit?: number;
   apiKey: string;
 }): Promise<CompactIssue[]> {
-  const projectId = params.projectId ?? REDMINE_DEFAULT_PROJECT_ID;
-  if (!projectId) {
-    throw new Error("projectId não informado e REDMINE_DEFAULT_PROJECT_ID não configurado");
-  }
+  const projectId = await resolveProjectId(params.projectId, params.apiKey);
   const limit = params.limit ?? 100;
   const qs = new URLSearchParams({
     limit: String(limit),
@@ -276,14 +344,16 @@ export async function updateIssueStatus(
   notes?: string,
 ): Promise<void> {
   const statusId = await resolveStatusId(statusName, apiKey);
+  const prechecked = await checkStatusTransition(issueId, statusId, statusName, apiKey);
   await redmineFetch(`/issues/${issueId}.json`, apiKey, {
     method: "PUT",
     body: JSON.stringify({ issue: { status_id: statusId, ...(notes ? { notes } : {}) } }),
   });
+  if (!prechecked) await verifyStatusApplied(issueId, statusId, statusName, apiKey);
 }
 
 export async function createIssue(params: {
-  projectId?: string;
+  projectId: string;
   subject: string;
   description?: string;
   trackerName?: string;
@@ -292,10 +362,7 @@ export async function createIssue(params: {
   parentIssueId?: number;
   apiKey: string;
 }): Promise<DetailedIssue> {
-  const projectId = params.projectId ?? REDMINE_DEFAULT_PROJECT_ID;
-  if (!projectId) {
-    throw new Error("projectId não informado e REDMINE_DEFAULT_PROJECT_ID não configurado");
-  }
+  const projectId = await resolveProjectId(params.projectId, params.apiKey);
   const issue: Record<string, unknown> = {
     project_id: projectId,
     subject: params.subject,
@@ -330,7 +397,13 @@ export async function updateIssue(params: {
   if (params.description !== undefined) issue.description = params.description;
   if (params.trackerName) issue.tracker_id = await resolveTrackerId(params.trackerName, params.apiKey);
   if (params.priorityName) issue.priority_id = await resolvePriorityId(params.priorityName, params.apiKey);
-  if (params.statusName) issue.status_id = await resolveStatusId(params.statusName, params.apiKey);
+  let statusId: number | undefined;
+  let prechecked = true;
+  if (params.statusName) {
+    statusId = await resolveStatusId(params.statusName, params.apiKey);
+    issue.status_id = statusId;
+    prechecked = await checkStatusTransition(params.issueId, statusId, params.statusName, params.apiKey);
+  }
   if (params.assignedToId !== undefined) issue.assigned_to_id = params.assignedToId;
   if (params.notes !== undefined) issue.notes = params.notes;
 
@@ -342,6 +415,9 @@ export async function updateIssue(params: {
     method: "PUT",
     body: JSON.stringify({ issue }),
   });
+  if (statusId !== undefined && params.statusName && !prechecked) {
+    await verifyStatusApplied(params.issueId, statusId, params.statusName, params.apiKey);
+  }
 }
 
 export async function addNote(

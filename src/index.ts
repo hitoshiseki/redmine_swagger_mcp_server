@@ -26,6 +26,7 @@ const {
   listRelations,
   listChildren,
   searchIssues,
+  listProjects,
   attachFile,
 } = await import("./redmine.js");
 const { searchApiEndpoints, getApiEndpoint } = await import("./swagger.js");
@@ -37,17 +38,17 @@ const AMBIENTE_SCHEMA = z
     "Ambiente da API a consultar: 'desenvolvimento' (padrão) ou 'producao'. Use 'producao' quando o usuário mencionar ambiente de produção explicitamente.",
   );
 
-const STATUS_NAMES = [
-  "Nova",
-  "Priorizada",
-  "Paralizada",
-  "Em andamento",
-  "Teste de Qualidade",
-  "Em Ajuste",
-  "Concluído",
-  "Fechada",
-  "Cancelada",
-] as const;
+const PROJECT_SCHEMA = z
+  .string()
+  .min(1)
+  .describe(
+    "Projeto do Redmine: id numérico, identificador ou nome. Se o usuário ainda não disse o projeto nesta conversa, NÃO adivinhe: pergunte (chame redmine_list_projects pra mostrar as opções). Depois que ele escolher, reutilize o mesmo projeto nas próximas chamadas da conversa, sem perguntar de novo, até ele pedir pra trocar.",
+  );
+
+const STATUS_SCHEMA = z
+  .string()
+  .min(1)
+  .describe("Nome do status no Redmine. Use redmine_list_statuses pra ver os nomes válidos.");
 
 function textResult(data: unknown) {
   return {
@@ -70,18 +71,32 @@ function buildServer(apiKey: string): McpServer {
   });
 
   server.registerTool(
+    "redmine_list_projects",
+    {
+      title: "Listar projetos do Redmine",
+      description:
+        "Lista os projetos do Redmine visíveis pro usuário (id, nome, identificador, projeto-pai). Use quando o usuário não disser em qual projeto trabalhar, pra mostrar as opções e pedir que ele escolha.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return textResult(await listProjects(apiKey));
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "redmine_list_issues",
     {
       title: "Listar tarefas do Redmine por status e/ou tracker",
       description:
-        "Busca as tarefas de um projeto Redmine filtradas por status (Nova, Priorizada, Paralizada, Em andamento, Teste de Qualidade, Em Ajuste, Concluído, Fechada, Cancelada) e/ou tracker (tipo da tarefa, ex: Bug, Feature, Task). Use redmine_list_trackers pra ver os nomes exatos disponíveis.",
+        "Busca as tarefas de um projeto Redmine filtradas por status e/ou tracker (tipo da tarefa, ex: Bug, Feature, Task). O projeto é obrigatório. Use redmine_list_statuses e redmine_list_trackers pra ver os nomes exatos disponíveis.",
       inputSchema: {
-        status: z.enum(STATUS_NAMES).optional().describe("Nome exato do status no Redmine"),
+        status: STATUS_SCHEMA.optional(),
         tracker: z.string().optional().describe("Nome exato do tracker/tipo no Redmine, ex: Bug"),
-        projectId: z
-          .string()
-          .optional()
-          .describe("ID do projeto Redmine. Se omitido, usa REDMINE_DEFAULT_PROJECT_ID do .env"),
+        projectId: PROJECT_SCHEMA,
         limit: z.number().int().positive().max(200).optional().describe("Máximo de tarefas (default 100)"),
       },
     },
@@ -129,7 +144,7 @@ function buildServer(apiKey: string): McpServer {
       description: "Atualiza o status de uma tarefa do Redmine pelo id.",
       inputSchema: {
         issueId: z.number().int().positive().describe("Id da tarefa"),
-        status: z.enum(STATUS_NAMES).describe("Novo status"),
+        status: STATUS_SCHEMA,
         notes: z.string().optional().describe("Comentário opcional explicando o motivo da mudança de status"),
       },
     },
@@ -209,10 +224,7 @@ function buildServer(apiKey: string): McpServer {
         tracker: z.string().optional().describe("Nome exato do tracker/tipo, ex: Bug, Feature, Task"),
         priority: z.string().optional().describe("Nome exato da prioridade, ex: Normal, Alta, Urgente"),
         assignedToId: z.number().int().positive().optional().describe("Id do usuário responsável pela tarefa"),
-        projectId: z
-          .string()
-          .optional()
-          .describe("ID do projeto Redmine. Se omitido, usa REDMINE_DEFAULT_PROJECT_ID do .env"),
+        projectId: PROJECT_SCHEMA,
         parentIssueId: z.number().int().positive().optional().describe("Id da tarefa-mãe, pra criar como subtarefa"),
       },
     },
@@ -250,7 +262,7 @@ function buildServer(apiKey: string): McpServer {
         description: z.string().optional().describe("Nova descrição"),
         tracker: z.string().optional().describe("Novo tracker/tipo, ex: Bug, Feature, Task"),
         priority: z.string().optional().describe("Nova prioridade, ex: Normal, Alta, Urgente"),
-        status: z.enum(STATUS_NAMES).optional().describe("Novo status"),
+        status: STATUS_SCHEMA.optional(),
         assignedToId: z.number().int().positive().optional().describe("Id do novo responsável"),
         notes: z.string().min(1).describe("Comentário obrigatório explicando o motivo da alteração"),
       },
